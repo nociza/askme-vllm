@@ -1,0 +1,59 @@
+version: '3.9'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: ./deploy/Dockerfile
+      target: prod
+    image: FleeceKMBackend:${FLEECEKMBACKEND_VERSION:-latest}
+    restart: always
+    env_file:
+    - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      FLEECEKMBACKEND_HOST: 0.0.0.0
+      FLEECEKMBACKEND_DB_HOST: FleeceKMBackend-db
+      FLEECEKMBACKEND_DB_PORT: 3306
+      FLEECEKMBACKEND_DB_USER: FleeceKMBackend
+      FLEECEKMBACKEND_DB_PASS: FleeceKMBackend
+      FLEECEKMBACKEND_DB_BASE: FleeceKMBackend
+
+  db:
+    image: bitnami/mysql:8.0.30
+    hostname: FleeceKMBackend-db
+    restart: always
+    environment:
+      MYSQL_ROOT_USER: "FleeceKMBackend"
+      MYSQL_ROOT_PASSWORD: "FleeceKMBackend"
+      MYSQL_DATABASE: "FleeceKMBackend"
+      MYSQL_AUTHENTICATION_PLUGIN: "mysql_native_password"
+    healthcheck:
+      test: mysqladmin ping -h localhost
+      interval: 10s
+      timeout: 5s
+      retries: 40
+    volumes:
+    - FleeceKMBackend-db-data:/bitnami/mysql/data
+
+  migrator:
+    image: FleeceKMBackend:${FLEECEKMBACKEND_VERSION:-latest}
+    restart: "no"
+    command: alembic upgrade head
+    environment:
+      FLEECEKMBACKEND_DB_HOST: FleeceKMBackend-db
+      FLEECEKMBACKEND_DB_PORT: 3306
+      FLEECEKMBACKEND_DB_USER: FleeceKMBackend
+      FLEECEKMBACKEND_DB_PASS: FleeceKMBackend
+      FLEECEKMBACKEND_DB_BASE: FleeceKMBackend
+    depends_on:
+      db:
+        condition: service_healthy
+
+
+
+volumes:
+  FleeceKMBackend-db-data:
+    name: FleeceKMBackend-db-data

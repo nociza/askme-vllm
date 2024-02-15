@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "FleeceKMBackend"
+name = "fleecekm_server"
 version = "0.1.0"
 description = ""
 authors = [
@@ -19,7 +19,6 @@ pydantic-settings = "^2"
 yarl = "^1.9.2"
 ujson = "^5.8.0"
 SQLAlchemy = {version = "^2.0.18", extras = ["asyncio"]}
-alembic = "^1.11.1"
 aiomysql = "^0.2.0"
 mysqlclient = "^2.2.0"
 httptools = "^0.6.0"
@@ -42,7 +41,7 @@ httpx = "^0.23.3"
 [tool.isort]
 profile = "black"
 multi_line_output = 3
-src_paths = ["FleeceKMBackend",]
+src_paths = ["fleecekm_server",]
 
 [tool.mypy]
 strict = true
@@ -64,25 +63,25 @@ filterwarnings = [
     "ignore:.*unclosed.*:ResourceWarning",
 ]
 env = [
-    "FLEECEKMBACKEND_ENVIRONMENT=pytest",
-    "FLEECEKMBACKEND_DB_BASE=FleeceKMBackend_test",
+    "FLEECEKM_SERVER_ENVIRONMENT=pytest",
+    "FLEECEKM_SERVER_DB_BASE=fleecekm_server_test",
 ]
 
 [fastapi-template.options]
-project_name = "FleeceKMBackend"
+project_name = "fleecekm_server"
 api_type = "rest"
 enable_redis = "None"
 enable_rmq = "None"
 ci_type = "github"
-enable_migrations = "True"
+enable_migrations = "None"
 enable_taskiq = "None"
 enable_kube = "None"
-kube_name = "FleeceKMBackend"
-enable_routers = "True"
+kube_name = "fleecekm-server"
+enable_routers = "None"
 enable_kafka = "None"
 enable_loguru = "None"
 traefik_labels = "None"
-add_dummy = "True"
+add_dummy = "None"
 orm = "sqlalchemy"
 self_hosted_swagger = "None"
 prometheus_enabled = "None"

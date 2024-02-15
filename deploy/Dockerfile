@@ -26,7 +26,7 @@ RUN apt-get purge -y \
 COPY . /app/src/
 RUN poetry install --only main
 
-CMD ["/usr/local/bin/python", "-m", "FleeceKMBackend"]
+CMD ["/usr/local/bin/python", "-m", "fleecekm_server"]
 
 FROM prod as dev
 

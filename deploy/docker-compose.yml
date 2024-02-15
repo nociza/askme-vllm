@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: ./deploy/Dockerfile
       target: prod
-    image: FleeceKMBackend:${FLEECEKMBACKEND_VERSION:-latest}
+    image: fleecekm_server:${FLEECEKM_SERVER_VERSION:-latest}
     restart: always
     env_file:
     - .env
@@ -14,21 +14,21 @@ services:
       db:
         condition: service_healthy
     environment:
-      FLEECEKMBACKEND_HOST: 0.0.0.0
-      FLEECEKMBACKEND_DB_HOST: FleeceKMBackend-db
-      FLEECEKMBACKEND_DB_PORT: 3306
-      FLEECEKMBACKEND_DB_USER: FleeceKMBackend
-      FLEECEKMBACKEND_DB_PASS: FleeceKMBackend
-      FLEECEKMBACKEND_DB_BASE: FleeceKMBackend
+      FLEECEKM_SERVER_HOST: 0.0.0.0
+      FLEECEKM_SERVER_DB_HOST: fleecekm_server-db
+      FLEECEKM_SERVER_DB_PORT: 3306
+      FLEECEKM_SERVER_DB_USER: fleecekm_server
+      FLEECEKM_SERVER_DB_PASS: fleecekm_server
+      FLEECEKM_SERVER_DB_BASE: fleecekm_server
 
   db:
     image: bitnami/mysql:8.0.30
-    hostname: FleeceKMBackend-db
+    hostname: fleecekm_server-db
     restart: always
     environment:
-      MYSQL_ROOT_USER: "FleeceKMBackend"
-      MYSQL_ROOT_PASSWORD: "FleeceKMBackend"
-      MYSQL_DATABASE: "FleeceKMBackend"
+      MYSQL_ROOT_USER: "fleecekm_server"
+      MYSQL_ROOT_PASSWORD: "fleecekm_server"
+      MYSQL_DATABASE: "fleecekm_server"
       MYSQL_AUTHENTICATION_PLUGIN: "mysql_native_password"
     healthcheck:
       test: mysqladmin ping -h localhost
@@ -36,24 +36,10 @@ services:
       timeout: 5s
       retries: 40
     volumes:
-    - FleeceKMBackend-db-data:/bitnami/mysql/data
-
-  migrator:
-    image: FleeceKMBackend:${FLEECEKMBACKEND_VERSION:-latest}
-    restart: "no"
-    command: alembic upgrade head
-    environment:
-      FLEECEKMBACKEND_DB_HOST: FleeceKMBackend-db
-      FLEECEKMBACKEND_DB_PORT: 3306
-      FLEECEKMBACKEND_DB_USER: FleeceKMBackend
-      FLEECEKMBACKEND_DB_PASS: FleeceKMBackend
-      FLEECEKMBACKEND_DB_BASE: FleeceKMBackend
-    depends_on:
-      db:
-        condition: service_healthy
+    - fleecekm_server-db-data:/bitnami/mysql/data
 
 
 
 volumes:
-  FleeceKMBackend-db-data:
-    name: FleeceKMBackend-db-data
+  fleecekm_server-db-data:
+    name: fleecekm_server-db-data

@@ -2,6 +2,7 @@ from fastapi import APIRouter, FastAPI
 from app.api.dataset.sample import router as sample_router
 from app.db.database import create_tables, delete_tables, engine
 from app.core.utils import load_csv_data
+from app.core.config import DATASET_PATH
 from fastapi import FastAPI
 
 app = FastAPI()
@@ -19,7 +20,7 @@ async def read_root():
 async def startup_event():
     await create_tables()
     try:
-        with open("data/wiki_text_structured.csv", "r") as file:
+        with open(DATASET_PATH, "r") as file:
             await load_csv_data(file)
     except FileNotFoundError:
         print("CSV file not found. Skipping data loading.")

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text
+from sqlalchemy import Column, Integer, String, Text, Boolean
 from app.db.database import Base
 
 
@@ -10,3 +10,7 @@ class WikiTextStructured(Base):
     subsection_name = Column(String)
     subsubsection_name = Column(String)
     text = Column(Text)
+    section_hierarchy = Column(String)
+    text_cleaned = Column(Text)
+    word_count = Column(Integer)
+    is_bad = Column(Boolean)

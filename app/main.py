@@ -1,18 +1,23 @@
-from fastapi import FastAPI
-from app.api.dataset import sample
+from fastapi import APIRouter, FastAPI
+from app.api.dataset.sample import router as sample_router
 from app.db.database import create_tables, delete_tables, engine
 from app.core.utils import load_csv_data
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI
 
 app = FastAPI()
 
-app.include_router(sample.router)
+# Include sub-routers
+app.include_router(sample_router, prefix="/sample", tags=["sample"])
+
+
+@app.get("/")
+async def read_root():
+    return {"message": "Welcome to the WikiText API!"}
 
 
 @app.on_event("startup")
 async def startup_event():
     await create_tables()
-    print("Tables created")
     try:
         with open("data/wiki_text_structured.csv", "r") as file:
             await load_csv_data(file)

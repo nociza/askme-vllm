@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, Boolean
-from app.db.database import Base
+from fleecekmbackend.db.database import Base
 
 
 class WikiTextStructured(Base):

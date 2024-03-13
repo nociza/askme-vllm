@@ -1,8 +1,8 @@
 from fastapi import APIRouter, FastAPI
-from app.api.dataset.sample import router as sample_router
-from app.db.database import create_tables, delete_tables, engine
-from app.core.utils import load_csv_data
-from app.core.config import DATASET_PATH
+from fleecekmbackend.api.dataset.sample import router as sample_router
+from fleecekmbackend.db.database import create_tables, delete_tables, engine
+from fleecekmbackend.core.utils import load_csv_data
+from fleecekmbackend.core.config import DATASET_PATH
 from fastapi import FastAPI
 
 app = FastAPI()

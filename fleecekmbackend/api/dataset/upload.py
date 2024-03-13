@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File
-from app.services.dataset.parse_csv import load_csv_data
+from fleecekmbackend.services.dataset.parse_csv import load_csv_data
 
 router = APIRouter()
 

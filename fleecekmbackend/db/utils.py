@@ -1,5 +1,5 @@
 from sqlalchemy import func
-from app.db.models import WikiTextStructured
+from fleecekmbackend.db.models import WikiTextStructured
 
 
 async def get_random_samples(n: int, db):

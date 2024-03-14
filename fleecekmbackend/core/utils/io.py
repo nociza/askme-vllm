@@ -1,7 +1,7 @@
-import pandas as pd
-from io import StringIO
 from fleecekmbackend.db.database import SessionLocal
 from fleecekmbackend.db.models import WikiTextStructured
+
+import pandas as pd
 
 
 async def load_csv_data(file):

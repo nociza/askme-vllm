@@ -10,6 +10,16 @@ async def load_csv_data(file):
         df = pd.read_csv(file)
         # Add more data processing here
 
+        # Check if the table exists
+        if not db.dialect.has_table(db, WikiTextStructured.__tablename__):
+            # Create the table
+            WikiTextStructured.__table__.create(db.bind)
+
+        # Lock the table
+        db.execute(
+            f"LOCK TABLE {WikiTextStructured.__tablename__} IN ACCESS EXCLUSIVE MODE"
+        )
+
         # Insert the data into the database
         df.to_sql(
             name=WikiTextStructured.__tablename__,

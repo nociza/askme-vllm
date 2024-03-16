@@ -21,5 +21,12 @@ async def create_tables():
     Base.metadata.create_all(bind=engine)
 
 
+async def create_tables_if_not_exist():
+    async with engine.begin() as conn:
+        existing_tables = await conn.run_sync(Base.metadata.reflect)
+        if not existing_tables:
+            await create_tables()
+
+
 async def delete_tables():
     Base.metadata.drop_all(bind=engine)

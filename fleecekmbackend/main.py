@@ -1,9 +1,10 @@
 from fastapi import FastAPI
 from fleecekmbackend.api.dataset.sample import router as sample_router
-from fleecekmbackend.db.database import create_tables, delete_tables, engine
+from fleecekmbackend.db.database import create_tables_if_not_exist
 from fleecekmbackend.core.utils.io import load_csv_data
 from fleecekmbackend.core.config import DATASET_PATH
 from fastapi import FastAPI
+import logging
 
 app = FastAPI()
 
@@ -18,21 +19,11 @@ async def read_root():
 
 @app.on_event("startup")
 async def startup_event():
-    await create_tables()
+    await create_tables_if_not_exist()
     try:
         with open(DATASET_PATH, "r") as file:
             await load_csv_data(file)
     except FileNotFoundError:
-        print("CSV file not found. Skipping data loading.")
+        logging.error("CSV file not found. Skipping data loading.")
     except Exception as e:
-        print(f"Error loading CSV data: {str(e)}")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    try:
-        await delete_tables()
-    except Exception as e:
-        print(f"Error deleting tables: {str(e)}")
-    finally:
-        await engine.dispose()
+        logging.error(f"Error loading CSV data: {str(e)}")

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fleecekmbackend.api.dataset.sample import router as sample_router
 from fleecekmbackend.db.database import create_tables_if_not_exist
-from fleecekmbackend.core.utils.io import load_csv_data
+from fleecekmbackend.db.io import load_csv_data
 from fleecekmbackend.core.config import DATASET_PATH
 import logging
 

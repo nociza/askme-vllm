@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
-from fleecekmbackend.db.utils import get_random_samples_raw
+from fleecekmbackend.db.helpers import get_random_samples_raw
 from sqlalchemy.orm import Session
-from fleecekmbackend.db.utils import get_db
+from fleecekmbackend.db.ctl import get_db
 
 router = APIRouter()
 

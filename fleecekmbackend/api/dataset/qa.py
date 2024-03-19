@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from fleecekmbackend.db.utils import get_random_samples_raw_as_df
-from fleecekmbackend.db.utils import get_db
+from fleecekmbackend.db.helpers import get_random_samples_raw_as_df
+from fleecekmbackend.db.ctl import get_db
 from fleecekmbackend.services.dataset.fleece_qa import process_row
 from fleecekmbackend.db.models import WikiTextQA
 from sqlalchemy import func, select

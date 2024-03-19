@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, Boolean
-from fleecekmbackend.db.utils import Base
+from fleecekmbackend.db.ctl import Base
 import hashlib
 
 

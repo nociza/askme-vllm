@@ -1,6 +1,5 @@
-from fleecekmbackend.db.utils import async_session
+from fleecekmbackend.db.ctl import async_session
 from fleecekmbackend.db.models import WikiTextStructured
-from fleecekmbackend.db.utils import async_session
 from sqlalchemy import func, select
 import pandas as pd
 import logging
@@ -57,3 +56,14 @@ async def load_csv_data(file):
             
         finally:
             logging.info("Data loaded successfully")
+
+async def get_random_samples_raw(n: int, db):
+    query = db.query(WikiTextStructured).order_by(func.random()).limit(n)
+    samples = query.all()
+    return samples
+
+async def get_random_samples_raw_as_df(n: int, db):
+    query = db.query(WikiTextStructured).order_by(func.random()).limit(n)
+    samples = query.all()
+    df = pd.DataFrame([sample.__dict__ for sample in samples])
+    return df

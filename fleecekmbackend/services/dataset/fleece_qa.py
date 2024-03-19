@@ -6,6 +6,7 @@ import random
 import pandas as pd
 import logging
 import tqdm
+import hashlib
 
 from typing import List, Dict
 from fleecekmbackend.core.utils.llm import llm_safe_request, randwait
@@ -14,6 +15,7 @@ WAIT = 0.5
 MODEL = "togethercomputer/llama-2-70b-chat"
 STOP = ["[/INST]", "</s>"]
 PROMPT_PREFIX, PROMPT_SUFFIX = ["[INST]", "[/INST]"]
+NUMQUESTIONS = 3
 
 df = pd.read_csv("wiki_text_cleaned.csv")
 
@@ -127,7 +129,6 @@ def generate_questions(
 
     return good_questions
 
-
 def get_answer(question, reference=None, temperature=0.8, max_token=256):
     time.sleep(randwait(WAIT))
     # retreival
@@ -150,7 +151,6 @@ def get_answer(question, reference=None, temperature=0.8, max_token=256):
         prompt_suffix=PROMPT_SUFFIX,
     )
     return output["output"]["choices"][0]["text"]
-
 
 def rate_answer(
     question,
@@ -201,7 +201,66 @@ def rate_answer(
 
     return score, rationale
 
+def process_row(row, i=-1, num_questions=NUMQUESTIONS):
+    time.sleep(random.random())
+    if row["subsubsection_name"] and row["subsection_name"]:
+        fact = f"In an article about {row['page_name']}, section {row['section_name']}, subsection {row['subsection_name']}, paragraph {row['subsubsection_name']} mentioned: {row['text']}"
+    elif row["subsection_name"]:
+        fact = f"In an article about {row['page_name']}, section {row['section_name']}, subsection {row['subsection_name']} mentioned: {row['text']}"
+    else:
+        fact = f"In an article about {row['page_name']}, section {row['section_name']} mentioned: {row['text']}"
 
+    currIndices = [f"{i+1}.{x+1}" for x in range(num_questions)]
+    currParagraphs = [fact for i in range(num_questions)]
+    curr_questions = generate_questions(fact, num_questions, row["page_name"])
+
+    curr_answers_zs = []
+    curr_answers_ic = []
+    for q in curr_questions:
+        curr_answers_zs.append(get_answer(q))
+        curr_answers_ic.append(get_answer(q, fact))
+
+    curr_ratings_zs_score = []
+    curr_ratings_ic_score = []
+    curr_ratings_zs_rationale = []
+    curr_ratings_ic_rationale = []
+
+    for i in range(num_questions):
+        zs_score, zs_rationale = rate_answer(
+            curr_questions[i], curr_answers_zs[i], fact
+        )
+        curr_ratings_zs_score.append(zs_score)
+        curr_ratings_zs_rationale.append(zs_rationale)
+        rag_score, rag_rationale = rate_answer(
+            curr_questions[i], curr_answers_ic[i], fact
+        )
+        curr_ratings_ic_score.append(rag_score)
+        curr_ratings_ic_rationale.append(rag_rationale)
+
+    curr_hash = []
+    for i in range(num_questions):
+        data = f"{currParagraphs[i]}{curr_questions[i]}{curr_answers_zs[i]}{curr_answers_ic[i]}".encode('utf-8')
+        curr_hash.append(hashlib.sha256(data).hexdigest())
+
+    curr_paragraph_hash = hashlib.sha256(fact.encode('utf-8')).hexdigest()
+    
+    temp = {
+        "index": currIndices, # only used for whole dataset generation
+        "paragraph": currParagraphs,
+        "paragraph_hash": curr_paragraph_hash,
+        "question": curr_questions,
+        "ans_zs": curr_answers_zs,
+        "ans_ic": curr_answers_ic,
+        "rating_zs_score": curr_ratings_zs_score,
+        "rating_zs_rationale": curr_ratings_zs_rationale,
+        "rating_ic_score": curr_ratings_ic_score,
+        "rating_ic_rationale": curr_ratings_ic_rationale,
+        "hash": curr_hash
+    }
+    return temp
+
+
+############################### Under Development ################################
 def rate_answer_score(
     question,
     answer,
@@ -218,6 +277,8 @@ def rate_answer_score(
     rating_raw = output["output"]["choices"][0]["text"]
 
 
+
+############################### Generate Dataset ################################
 def generate_dataset(
     dataframe, num_questions=3, csv_file_path="./dataset.csv", return_df=True
 ):
@@ -226,66 +287,18 @@ def generate_dataset(
         "paragraph",
         "question",
         "ans_zs",
-        "ans_rag",
+        "ans_ic",
         "rating_zs_score",
         "rating_zs_rationale",
-        "rating_rag_score",
-        "rating_rag_rationale",
+        "rating_ic_score",
+        "rating_ic_rationale",
+        "hash"
     ]
 
     df = pd.DataFrame(columns=df_cols)
     if not os.path.isfile(csv_file_path):
         df.to_csv(csv_file_path, mode="w", header=True, index=False)
-
-    def process_row(i, row):
-        time.sleep(random.random())
-        if row["subsubsection_name"] and row["subsection_name"]:
-            fact = f"In an article about {row['page_name']}, section {row['section_name']}, subsection {row['subsection_name']}, paragraph {row['subsubsection_name']} mentioned: {row['text']}"
-        elif row["subsection_name"]:
-            fact = f"In an article about {row['page_name']}, section {row['section_name']}, subsection {row['subsection_name']} mentioned: {row['text']}"
-        else:
-            fact = f"In an article about {row['page_name']}, section {row['section_name']} mentioned: {row['text']}"
-
-        currIndices = [f"{i+1}.{x+1}" for x in range(num_questions)]
-        currParagraphs = [fact for i in range(num_questions)]
-        curr_questions = generate_questions(fact, num_questions, row["page_name"])
-
-        curr_answers_zs = []
-        curr_answers_rag = []
-        for q in curr_questions:
-            curr_answers_zs.append(get_answer(q))
-            curr_answers_rag.append(get_answer(q, fact))
-
-        curr_ratings_zs_score = []
-        curr_ratings_rag_score = []
-        curr_ratings_zs_rationale = []
-        curr_ratings_rag_rationale = []
-
-        for i in range(num_questions):
-            zs_score, zs_rationale = rate_answer(
-                curr_questions[i], curr_answers_zs[i], fact
-            )
-            curr_ratings_zs_score.append(zs_score)
-            curr_ratings_zs_rationale.append(zs_rationale)
-            rag_score, rag_rationale = rate_answer(
-                curr_questions[i], curr_answers_rag[i], fact
-            )
-            curr_ratings_rag_score.append(rag_score)
-            curr_ratings_rag_rationale.append(rag_rationale)
-
-        temp = {
-            "index": currIndices,
-            "paragraph": currParagraphs,
-            "question": curr_questions,
-            "ans_zs": curr_answers_zs,
-            "ans_rag": curr_answers_rag,
-            "rating_zs_score": curr_ratings_zs_score,
-            "rating_zs_rationale": curr_ratings_zs_rationale,
-            "rating_rag_score": curr_ratings_rag_score,
-            "rating_rag_rationale": curr_ratings_rag_rationale,
-        }
-        return temp
-
+        
     for i, row in tqdm(dataframe.iterrows(), total=dataframe.shape[0]):
         while True:
             try:

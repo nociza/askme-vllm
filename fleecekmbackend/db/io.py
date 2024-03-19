@@ -1,6 +1,6 @@
-from fleecekmbackend.db.database import async_session
+from fleecekmbackend.db.utils import async_session
 from fleecekmbackend.db.models import WikiTextStructured
-from fleecekmbackend.db.database import async_session
+from fleecekmbackend.db.utils import async_session
 from sqlalchemy import func, select
 import pandas as pd
 import logging

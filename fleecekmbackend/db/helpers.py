@@ -69,4 +69,5 @@ async def get_random_samples_raw_as_df(n: int, db: AsyncSession):
     result = await db.execute(query)
     samples = result.scalars().all()
     df = pd.DataFrame([sample.__dict__ for sample in samples])
+    df = df.drop(columns=['_sa_instance_state'])
     return df

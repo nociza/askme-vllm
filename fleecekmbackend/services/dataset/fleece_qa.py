@@ -14,7 +14,9 @@ WAIT = 0.5
 MODEL = "togethercomputer/llama-2-70b-chat"
 STOP = ["[/INST]", "</s>"]
 PROMPT_PREFIX, PROMPT_SUFFIX = ["[INST]", "[/INST]"]
+
 NUMQUESTIONS = 3
+MAX_ATTEMPTS = 5
 
 def is_answerable(question):
     if not question.strip():
@@ -63,6 +65,7 @@ def generate_questions(
     paragraph,
     k=3,
     prefix="",
+    max_attempts=MAX_ATTEMPTS,
 ):
     time.sleep(randwait(WAIT))
 
@@ -125,7 +128,7 @@ def generate_questions(
 
     return good_questions
 
-def get_answer(question, reference=None, temperature=0.8, max_token=256):
+def get_answer(question, reference=None):
     time.sleep(randwait(WAIT))
     # retreival
     if reference:

@@ -25,20 +25,21 @@ async def random_samples_create(n: int, db: Session = Depends(get_db)):
             await conn.run_sync(WikiTextQA.__table__.create)
             await conn.commit()
 
-        samples = await get_random_samples_raw_as_df(n, db)
+        samples_df = await get_random_samples_raw_as_df(n, db)
         try:
-            for sample in samples:
-                processed_qa_obj = await process_row(sample, db)
-                # Check if the QA object already exists in the database based on hash comparison
+            processed_qa_objs = []
+            for _, sample in samples_df.iterrows():
+                processed_qa_obj = await process_row(sample)
                 existing_qa_obj = db.query(WikiTextQA).filter(WikiTextQA.hash == processed_qa_obj.hash).first()
                 if existing_qa_obj is None:
-                    # QA object does not exist, append it to the database
                     db.add(processed_qa_obj)
-            db.commit()  # Commit the data insertion transaction
+                processed_qa_objs.append(processed_qa_obj)
+            db.commit()
+            return processed_qa_objs
+
         except Exception as e:
             db.rollback()  # Rollback the data insertion transaction if an error occurs
             raise e
-        return samples
 
     except Exception as e:
         logging.error(f"Error loading random samples: {str(e)}")

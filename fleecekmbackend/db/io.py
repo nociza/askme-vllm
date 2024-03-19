@@ -1,22 +1,35 @@
 from fleecekmbackend.db.database import async_session
 from fleecekmbackend.db.models import WikiTextStructured
 from fleecekmbackend.db.database import async_session
+from sqlalchemy import func, select
 import pandas as pd
+import logging
+
+logging.getLogger().addHandler(logging.StreamHandler())
 
 async def load_csv_data(file):
     async with async_session() as db:
         try:
-            df = pd.read_csv(file)
-            # Add more data processing here
-            
-            # Check if the table exists
+            # Check if the table exists and has data
             conn = await db.connection()
             has_table = await conn.run_sync(
                 lambda conn: conn.dialect.has_table(conn, WikiTextStructured.__tablename__)
             )
             
+            if has_table:
+                # Check if the table has any data
+                result = await conn.execute(select(func.count()).select_from(WikiTextStructured))
+                count = result.scalar()
+                if count > 0:
+                    print(f"Dataset is already loaded with {count} entries. Skipping loading process.")
+                    return
+            
+            # Load the dataset if the table doesn't exist or is empty
+            df = pd.read_csv(file)
+            # Add more data processing here
+            
             if not has_table:
-                # Create the table
+                # Create the table if it doesn't exist
                 await conn.run_sync(WikiTextStructured.__table__.create)
                 await conn.commit()  # Commit the table creation transaction
                 
@@ -40,7 +53,7 @@ async def load_csv_data(file):
                 raise e
             
         except Exception as e:
-            print(f"Error loading CSV data helper: {str(e)}")
+            logging.error(f"Error loading CSV data helper: {str(e)}")
             
         finally:
-            print("Data loaded successfully")
+            logging.info("Data loaded successfully")

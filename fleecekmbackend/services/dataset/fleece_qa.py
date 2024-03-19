@@ -8,7 +8,6 @@ import logging
 import tqdm
 import hashlib
 
-from typing import List, Dict
 from fleecekmbackend.core.utils.llm import llm_safe_request, randwait
 
 WAIT = 0.5
@@ -16,9 +15,6 @@ MODEL = "togethercomputer/llama-2-70b-chat"
 STOP = ["[/INST]", "</s>"]
 PROMPT_PREFIX, PROMPT_SUFFIX = ["[INST]", "[/INST]"]
 NUMQUESTIONS = 3
-
-df = pd.read_csv("wiki_text_cleaned.csv")
-
 
 def is_answerable(question):
     if not question.strip():
@@ -243,7 +239,7 @@ def process_row(row, i=-1, num_questions=NUMQUESTIONS):
         curr_hash.append(hashlib.sha256(data).hexdigest())
 
     curr_paragraph_hash = hashlib.sha256(fact.encode('utf-8')).hexdigest()
-    
+
     temp = {
         "index": currIndices, # only used for whole dataset generation
         "paragraph": currParagraphs,

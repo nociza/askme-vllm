@@ -15,14 +15,15 @@ router = APIRouter()
 @router.get("/rand-sample-create")
 async def random_samples_create(n: int, db: Session = Depends(get_db)):
     try:
-        # Check if the table exists and has data
-        conn = db.connection()
-        has_table = db.bind.has_table(conn, WikiTextQA.__tablename__)
+        conn = await db.connection()
 
+        # create the table if it doesn't exist
+        has_table = await conn.run_sync(
+            lambda conn: conn.dialect.has_table(conn, WikiTextQA.__tablename__)
+        )
         if not has_table:
-            # Create the table if it doesn't exist
-            WikiTextQA.__table__.create(bind=db.bind)
-            db.commit()  # Commit the table creation transaction
+            await conn.run_sync(WikiTextQA.__table__.create)
+            await conn.commit()
 
         samples = await get_random_samples_raw_as_df(n, db)
         try:
@@ -37,15 +38,18 @@ async def random_samples_create(n: int, db: Session = Depends(get_db)):
         except Exception as e:
             db.rollback()  # Rollback the data insertion transaction if an error occurs
             raise e
+        return samples
 
     except Exception as e:
         logging.error(f"Error loading random samples: {str(e)}")
-    finally:
-        logging.info("Random samples loaded successfully")
+        raise e
+    
+    
 
 # only samples from the existing database, no new samples are created
 @router.get("/rand-sample-existing")
 async def random_samples_existing(n: int, db: Session = Depends(get_db)):
-    query = db.query(WikiTextQA).order_by(func.random()).limit(n)
-    samples = query.all()
+    query = select(WikiTextQA).order_by(func.random()).limit(n)
+    result = db.execute(query)
+    samples = result.scalars().all()
     return samples

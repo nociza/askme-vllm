@@ -211,6 +211,9 @@ def process_row(row, i=-1, num_questions=NUMQUESTIONS):
 
     currIndices = [f"{i+1}.{x+1}" for x in range(num_questions)]
     currParagraphs = [fact for i in range(num_questions)]
+
+    #TODO debug this
+    print(fact, num_questions, row["page_name"])
     curr_questions = generate_questions(fact, num_questions, row["page_name"])
 
     curr_answers_zs = []

@@ -3,7 +3,7 @@ from fleecekmbackend.db.ctl import Base
 import hashlib
 
 
-class WikiTextStructured(Base): # change to paragraph
+class WikiTextParagraph(Base): # change to paragraph
     __tablename__ = "wiki_text_structured"
     id = Column(Integer, primary_key=True, index=True)
     page_name = Column(String)

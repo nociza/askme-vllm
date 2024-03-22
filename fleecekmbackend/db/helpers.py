@@ -1,5 +1,5 @@
 from fleecekmbackend.db.ctl import async_session
-from fleecekmbackend.db.models import WikiTextStructured
+from fleecekmbackend.db.models import WikiTextParagraph
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 import pandas as pd
@@ -13,12 +13,12 @@ async def load_csv_data(file):
             # Check if the table exists and has data
             conn = await db.connection()
             has_table = await conn.run_sync(
-                lambda conn: conn.dialect.has_table(conn, WikiTextStructured.__tablename__)
+                lambda conn: conn.dialect.has_table(conn, WikiTextParagraph.__tablename__)
             )
             
             if has_table:
                 # Check if the table has any data
-                result = await conn.execute(select(func.count()).select_from(WikiTextStructured))
+                result = await conn.execute(select(func.count()).select_from(WikiTextParagraph))
                 count = result.scalar()
                 if count > 0:
                     print(f"Dataset is already loaded with {count} entries. Skipping loading process.")
@@ -30,14 +30,14 @@ async def load_csv_data(file):
             
             if not has_table:
                 # Create the table if it doesn't exist
-                await conn.run_sync(WikiTextStructured.__table__.create)
+                await conn.run_sync(WikiTextParagraph.__table__.create)
                 await conn.commit()  # Commit the table creation transaction
                 
             try:
                 # Insert the data into the database
                 await conn.run_sync(
                     lambda conn: df.to_sql(
-                        name=WikiTextStructured.__tablename__,
+                        name=WikiTextParagraph.__tablename__,
                         con=conn,
                         if_exists="append",
                         index=False,
@@ -59,13 +59,13 @@ async def load_csv_data(file):
             logging.info("Data loaded successfully")
 
 async def get_random_samples_raw(n: int, db: AsyncSession):
-    query = select(WikiTextStructured).order_by(func.random()).limit(n)
+    query = select(WikiTextParagraph).order_by(func.random()).limit(n)
     result = await db.execute(query)
     samples = result.scalars().all()
     return samples
 
 async def get_random_samples_raw_as_df(n: int, db: AsyncSession):
-    query = select(WikiTextStructured).order_by(func.random()).limit(n)
+    query = select(WikiTextParagraph).order_by(func.random()).limit(n)
     result = await db.execute(query)
     samples = result.scalars().all()
     df = pd.DataFrame([sample.__dict__ for sample in samples])

@@ -7,13 +7,14 @@ import pandas as pd
 import logging
 import tqdm
 import hashlib
+
 from datetime import datetime
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from fleecekmbackend.db.ctl import async_session
 from fleecekmbackend.db.models import Paragraph, Author, Question, Answer, Rating
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-
-from fleecekmbackend.core.utils.llm import llm_safe_request, randwait
+from fleecekmbackend.db.helpers import create_author_if_not_exists
+from fleecekmbackend.core.utils.llm import llm_safe_request, randwait, generate_prompts_from_template
 
 WAIT = 0.5
 MODEL = "togethercomputer/llama-2-70b-chat"
@@ -27,17 +28,15 @@ def is_answerable(question):
     if not question.strip():
         logging.debug("No question seen in is_answerable: ", question.strip())
         return False
-
     time.sleep(randwait(WAIT))
     output = llm_safe_request(
-        f"Is the following a well-formed question? reply 'YES' and 'NO' only: \n\n {question}",
+        f"Is the following a well-formed question? Reply 'YES' and 'NO' only: \n\n {question}",
         MODEL,
         STOP,
         prompt_prefix=PROMPT_PREFIX,
         prompt_suffix=PROMPT_SUFFIX,
     )
     answer = output["output"]["choices"][0]["text"].strip()
-
     if answer.strip().startswith(("NO", "no", "No")):
         return False
     elif answer.strip().startswith(("YES", "Yes", "yes")):
@@ -45,100 +44,89 @@ def is_answerable(question):
     logging.info("Question Malformed: ", answer)
     return False
 
-
-def regenerate_questions(
-    paragraph,
-    existing_questions,
-    prefix="",  # providing context for fair zeroshot
+# Generate questions for a paragraph
+async def generate_questions(
+    db: AsyncSession,
+    paragraph: Paragraph,
+    k: int = NUMQUESTIONS,
+    max_attempts: int = MAX_ATTEMPTS,
 ):
-    existing = ""
-    for i, q in enumerate(existing_questions):
-        existing += f"{i+1}. {q} \n"
-
+    # process prompt template
     time.sleep(randwait(WAIT))
-    output = llm_safe_request(
-        f"{PROMPT_PREFIX} Generate a short answer (DO NOT INCLUDE CHOICES) question about the facts mentioned in the following paragraph: {paragraph}\n\n The question should be self-contained; meaning you should not use references such as 'it', 'the game', 'the person', etc., but should directly include the name of the referenced item instead.\n {PROMPT_SUFFIX} {existing}",
-        MODEL,
-        STOP,
+    prompt_template = "{PROMPT_PREFIX}Generate {NUM_QUESTIONS} additional short answer (DO NOT INCLUDE CHOICES) questions about the facts mentioned in the following paragraph. The questions should be self-contained; meaning you avoid using references such as 'it', 'the game', 'the person', etc., but should directly include the name of the referenced item instead.\n\nExisting questions:\n{EXISTING_QUESTIONS}\n\nParagraph: {PARAGRAPH}\n{PROMPT_SUFFIX}"
+    context, fact = generate_fact_with_context(paragraph)
+    _, template = generate_prompts_from_template(
+        prompt_template,
+        {
+            "NUM_QUESTIONS": k,
+            "EXISTING_QUESTIONS": "",
+            "PARAGRAPH": fact,
+            "PROMPT_PREFIX": PROMPT_PREFIX,
+            "PROMPT_SUFFIX": PROMPT_SUFFIX,
+        },
     )
-    return (
-        prefix + output["output"]["choices"][0]["text"].strip().split("\n")[0].strip()
-    )
-
-
-def generate_questions(
-    paragraph,
-    k=3,
-    prefix="",
-    max_attempts=MAX_ATTEMPTS,
-):
-    time.sleep(randwait(WAIT))
-
-    prefix = f"In the context of {prefix}, "  # providing context for fair zeroshot
-
-    output = llm_safe_request(
-        f"Generate {k} short answer (DO NOT INCLUDE CHOICES) questions about the facts mentioned in the following paragraph in an ordered list separated by linebreak '\n': {paragraph}\n\n",
-        MODEL,
-        STOP,
-        prompt_prefix=PROMPT_PREFIX,
-        prompt_suffix=PROMPT_SUFFIX,
-    )
-    # Extract and store the generated question
-    result_raw = output["output"]["choices"][0]["text"]
-    result = [
-        prefix + x[2:].strip()
-        for x in result_raw.split("\n")
-        if re.match(r"^[0-9]\.", x)
-    ]
-
-    while (len(result) != k or "" in result) and max_attempts > 0:
+    author = create_author_if_not_exists(db, template, MODEL)
+    
+    # helper function to generate questions
+    def generate_or_regenerate_questions(existing_questions):
+        existing = ""
+        for i, q in enumerate(existing_questions):
+            existing += f"{i+1}. {q}\n"
+        prompt, _ = generate_prompts_from_template(
+            prompt_template,
+            {
+                "NUM_QUESTIONS": k,
+                "EXISTING_QUESTIONS": existing,
+                "PARAGRAPH": fact,
+                "PROMPT_PREFIX": PROMPT_PREFIX,
+                "PROMPT_SUFFIX": PROMPT_SUFFIX,
+            },
+        )
         time.sleep(randwait(WAIT))
-        fixed = llm_safe_request(
-            f"Generate {k} short answer (DO NOT INCLUDE CHOICES) questions about the facts mentioned in the following paragraph in an ordered list separated by linebreak '\n': {paragraph}\n\n",
-            MODEL,
-            STOP,
-            prompt_prefix=PROMPT_PREFIX,
-            prompt_suffix=PROMPT_SUFFIX,
-        )["output"]["choices"][0]["text"]
-        max_attempts -= 1
-        result = [
-            prefix + x[2:].strip()
-            for x in fixed.split("\n")
+        output = llm_safe_request(prompt, MODEL, STOP)
+        new_questions = [
+            x[2:].strip()
+            for x in output["output"]["choices"][0]["text"].strip().split("\n")
             if re.match(r"^[0-9]\.", x)
         ]
+        return existing_questions + new_questions
 
-    if max_attempts <= 0:
-        raise Exception(
-            f"Cannot get {k} questions to the correct format after {max_attempts}"
-        )
-
+    # main loop
     good_questions = []
-    for q in result:
-        if is_answerable(q):
-            good_questions.append(q)
-
-    while len(good_questions) < k:
-        # print("Good: ", good_questions)
-        new_questions = regenerate_questions(paragraph, good_questions, prefix)
-        # print("New: ", new_questions)
-        for q in [
-            prefix + x[2:].strip()
-            for x in new_questions.split("\n")
-            if re.match(r"^[0-9]\.", x)
-        ]:
-            if len(good_questions) == k:
-                return good_questions
-            elif is_answerable(q):
-                good_questions.append(q)
-
+    attempts = 0
+    while len(good_questions) < k and attempts < max_attempts:
+        attempts += 1
+        questions = await generate_or_regenerate_questions(good_questions)
+        good_questions = [q for q in questions if is_answerable(q)]
+    if len(good_questions) < k:
+        raise Exception(
+            f"Cannot get {k} questions to the correct format after {max_attempts} attempts"
+        )
+    
+    # Add questions to the database
+    for q in good_questions:
+        question = Question(
+            paragraph_id=paragraph.id,
+            scope="single-paragraph",
+            text=q,
+            context=context,
+            author_id=author.id,
+            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            upvote=0,
+            downvote=0,
+        )
+        db.add(question)
+        await db.commit()
     return good_questions
 
-def get_answer(question, reference=None):
+# Generate an answer to a question
+def generate_answer(db: AsyncSession, question: Question, context: str = None):
     time.sleep(randwait(WAIT))
-    # retreival
-    if reference:
+    # in context
+    if context:
+        
         output = llm_safe_request(
-            f"Using this fact: {reference} \n\n Answer the following question in a succinct manner: {question}\n",
+            f"Using this fact: {context} \n\n Answer the following question in a succinct manner: {question}\n",
             MODEL,
             STOP,
             prompt_prefix=PROMPT_PREFIX,
@@ -205,19 +193,19 @@ def rate_answer(
 
     return score, rationale
 
-def generate_fact(sample):
-    if sample.subsubsection_name and sample.subsection_name:
-        fact = f"In an article about {sample.page_name}, section {sample.section_name}, subsection {sample.subsection_name}, paragraph {sample.subsubsection_name} mentioned: {sample.text}"
-    elif sample.subsection_name:
-        fact = f"In an article about {sample.page_name}, section {sample.section_name}, subsection {sample.subsection_name} mentioned: {sample.text}"
+def generate_fact_with_context(paragraph: Paragraph):
+    if paragraph.subsubsection_name and paragraph.subsection_name:
+        context = f"In an article about {paragraph.page_name}, section {paragraph.section_name}, subsection {paragraph.subsection_name}, paragraph {paragraph.subsubsection_name}"
+    elif paragraph.subsection_name:
+        context = f"In an article about {paragraph.page_name}, section {paragraph.section_name}, subsection {paragraph.subsection_name}"
     else:
-        fact = f"In an article about {sample.page_name}, section {sample.section_name} mentioned: {sample.text}"
-    return fact
+        context = f"In an article about {paragraph.page_name}, section {paragraph.section_name}"
+    return context, f"{context} mentioned: {paragraph.text}" 
 
-async def process_samples(db: AsyncSession, paragraph_samples):
-    for sample in paragraph_samples:
-        fact = generate_fact(sample)
-        curr_questions = generate_questions(fact)
+async def process_samples(db: AsyncSession, paragraphs: list[Paragraph]):
+    for paragraph in paragraphs:
+
+        curr_questions = generate_questions(db, paragraph)
 
         for i, question_text in enumerate(curr_questions):
             author = Author(model=MODEL)
@@ -225,7 +213,7 @@ async def process_samples(db: AsyncSession, paragraph_samples):
             await db.commit()
 
             question = Question(
-                paragraph_id=sample.id,
+                paragraph_id=paragraph.id,
                 scope="single-paragraph",
                 text=question_text,
                 author_id=author.id,
@@ -237,7 +225,7 @@ async def process_samples(db: AsyncSession, paragraph_samples):
             await db.commit()
 
             for setting in ["zs", "ic"]:
-                answer_text = get_answer(question_text, fact if setting == "ic" else None)
+                answer_text = generate_answer(question_text, fact if setting == "ic" else None)
                 answer_author = Author(model=MODEL)
                 db.add(answer_author)
                 await db.commit()
@@ -299,15 +287,14 @@ def process_row(row, i=-1, num_questions=NUMQUESTIONS):
     currIndices = [f"{i+1}.{x+1}" for x in range(num_questions)]
     currParagraphs = [fact for i in range(num_questions)]
 
-    #TODO debug this
     print(fact, num_questions, row["page_name"])
     curr_questions = generate_questions(fact, num_questions, row["page_name"])
 
     curr_answers_zs = []
     curr_answers_ic = []
     for q in curr_questions:
-        curr_answers_zs.append(get_answer(q))
-        curr_answers_ic.append(get_answer(q, fact))
+        curr_answers_zs.append(generate_answer(q))
+        curr_answers_ic.append(generate_answer(q, fact))
 
     curr_ratings_zs_score = []
     curr_ratings_ic_score = []

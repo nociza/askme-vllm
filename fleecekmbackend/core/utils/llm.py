@@ -8,7 +8,7 @@ from dotenv import dotenv_values
 together.api_key = dotenv_values()["TOGETHER_API_KEY"]
 
 WAIT = 0.5
-MAX_RETRIES = 5
+MAX_RETRIES = 10
 MAX_TOKEN = 512
 TEMPERATURE = 0.7
 TOP_P = 0.7
@@ -38,7 +38,7 @@ def llm_safe_request(
             prompt = prompt_prefix + " " + prompt
         if prompt_suffix:
             prompt = prompt + " " + prompt_suffix
-        return together.Complete.create(
+        return together.Complete.create( #TODO: Change this to use gpublaze
             prompt=prompt,
             model=model,
             max_tokens=max_tokens,
@@ -65,3 +65,10 @@ def llm_safe_request(
             stop,
             max_retries - 1,
         )
+
+
+def generate_prompts_from_template(template, variables):
+    template_variables = {key: f"<{value.__class__.__name__}>" for key, value in variables.items() if key not in ['PROMPT_PREFIX', 'PROMPT_SUFFIX']}
+    specific_prompt = template.format(**variables).strip()
+    template_prompt = template.replace("{PROMPT_PREFIX}", "").replace("{PROMPT_SUFFIX}", "").format(**template_variables).strip()
+    return specific_prompt, template_prompt

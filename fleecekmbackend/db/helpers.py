@@ -1,5 +1,5 @@
 from fleecekmbackend.db.ctl import async_session
-from fleecekmbackend.db.models import Paragraph
+from fleecekmbackend.db.models import Paragraph, Author
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 import pandas as pd
@@ -87,6 +87,13 @@ async def get_page_raw(db: AsyncSession, index: int = -1):
     samples = result.scalars().all()
     return samples
 
+def create_author_if_not_exists(db: AsyncSession, prompt: str, model: str):
+    author = db.query(Author).filter(Author.model == model, Author.prompt == prompt).first()
+    if author is None:
+        author = Author(model=model, prompt=prompt)
+        db.add(author)
+        db.commit()
+    return author
         
         
 

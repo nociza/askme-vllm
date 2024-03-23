@@ -28,6 +28,7 @@ class Question(Base):
     id = Column(Integer, primary_key=True, index=True)
     paragraph_id = Column(Integer) 
     scope = Column(String) # the scope of the question, e.g. "single-paragraph"
+    context = Column(Text) # the context of the question for a fair zeroshot evaluation
     text = Column(Text)
     author_id = Column(Integer) 
     timestamp = Column(String) 

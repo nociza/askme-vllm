@@ -7,6 +7,11 @@ import pandas as pd
 import logging
 import tqdm
 import hashlib
+from datetime import datetime
+from fleecekmbackend.db.ctl import async_session
+from fleecekmbackend.db.models import Paragraph, Author, Question, Answer, Rating
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 
 from fleecekmbackend.core.utils.llm import llm_safe_request, randwait
 
@@ -200,6 +205,88 @@ def rate_answer(
 
     return score, rationale
 
+def generate_fact(sample):
+    if sample.subsubsection_name and sample.subsection_name:
+        fact = f"In an article about {sample.page_name}, section {sample.section_name}, subsection {sample.subsection_name}, paragraph {sample.subsubsection_name} mentioned: {sample.text}"
+    elif sample.subsection_name:
+        fact = f"In an article about {sample.page_name}, section {sample.section_name}, subsection {sample.subsection_name} mentioned: {sample.text}"
+    else:
+        fact = f"In an article about {sample.page_name}, section {sample.section_name} mentioned: {sample.text}"
+    return fact
+
+async def process_samples(db: AsyncSession, paragraph_samples):
+    for sample in paragraph_samples:
+        fact = generate_fact(sample)
+        curr_questions = generate_questions(fact)
+
+        for i, question_text in enumerate(curr_questions):
+            author = Author(model=MODEL)
+            db.add(author)
+            await db.commit()
+
+            question = Question(
+                paragraph_id=sample.id,
+                scope="single-paragraph",
+                text=question_text,
+                author_id=author.id,
+                timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                upvote=0,
+                downvote=0,
+            )
+            db.add(question)
+            await db.commit()
+
+            for setting in ["zs", "ic"]:
+                answer_text = get_answer(question_text, fact if setting == "ic" else None)
+                answer_author = Author(model=MODEL)
+                db.add(answer_author)
+                await db.commit()
+
+                answer = Answer(
+                    question_id=question.id,
+                    author_id=answer_author.id,
+                    setting=setting,
+                    timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    text=answer_text,
+                )
+                db.add(answer)
+                await db.commit()
+
+                score, rationale = rate_answer(question_text, answer_text, fact)
+                rating_author = Author(model=MODEL)
+                db.add(rating_author)
+                await db.commit()
+
+                rating = Rating(
+                    text=rationale,
+                    value=score,
+                    answer_id=answer.id,
+                    author_id=rating_author.id,
+                    timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                )
+                db.add(rating)
+                await db.commit()
+
+
+############################### Under Development ################################
+def rate_answer_score(
+    question,
+    answer,
+    reference,
+):
+    time.sleep(randwait(WAIT))
+    output = llm_safe_request(
+        f"Based on this fact: {reference}, \n rate the following answer to the question '{question}': {answer}; give a number from 0-5 where 0 is completely incorrect and 5 is completely correct. Your answer should only include a number between 0 and 5 and nothing else.",
+        MODEL,
+        STOP,
+        prompt_prefix=PROMPT_PREFIX,
+        prompt_suffix=PROMPT_SUFFIX,
+    )
+    rating_raw = output["output"]["choices"][0]["text"]
+
+
+
+#################################### Legacy ######################################
 def process_row(row, i=-1, num_questions=NUMQUESTIONS):
     time.sleep(random.random())
     if row["subsubsection_name"] and row["subsection_name"]:
@@ -261,26 +348,6 @@ def process_row(row, i=-1, num_questions=NUMQUESTIONS):
     }
     return temp
 
-
-############################### Under Development ################################
-def rate_answer_score(
-    question,
-    answer,
-    reference,
-):
-    time.sleep(randwait(WAIT))
-    output = llm_safe_request(
-        f"Based on this fact: {reference}, \n rate the following answer to the question '{question}': {answer}; give a number from 0-5 where 0 is completely incorrect and 5 is completely correct. Your answer should only include a number between 0 and 5 and nothing else.",
-        MODEL,
-        STOP,
-        prompt_prefix=PROMPT_PREFIX,
-        prompt_suffix=PROMPT_SUFFIX,
-    )
-    rating_raw = output["output"]["choices"][0]["text"]
-
-
-
-############################### Generate Dataset ################################
 def generate_dataset(
     dataframe, num_questions=3, csv_file_path="./dataset.csv", return_df=True
 ):

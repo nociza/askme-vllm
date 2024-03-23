@@ -1,10 +1,9 @@
 from sqlalchemy import Column, Integer, String, Text, Boolean, Enum
 from fleecekmbackend.db.ctl import Base
-import hashlib
 
 
-class WikiTextParagraph(Base): # change to paragraph
-    __tablename__ = "wiki_text_structured"
+class Paragraph(Base): # change to paragraph
+    __tablename__ = "paragraph"
     id = Column(Integer, primary_key=True, index=True)
     page_name = Column(String)
     section_name = Column(String)
@@ -18,15 +17,17 @@ class WikiTextParagraph(Base): # change to paragraph
     within_page_order = Column(Integer)
 
 class Author(Base):
+    __tablename__ = "author"
     id = Column(Integer, primary_key=True, index=True)
     model = Column(String) # can be human
-    prompt = Column(String, optional=True) 
-    username = Column(String, optional=True)
+    prompt = Column(String, nullable=True) 
+    username = Column(String, nullable=True)
 
 class Question(Base):
+    __tablename__ = "question"
     id = Column(Integer, primary_key=True, index=True)
     paragraph_id = Column(Integer) 
-    scope = Column(String)
+    scope = Column(String) # the scope of the question, e.g. "single-paragraph"
     text = Column(Text)
     author_id = Column(Integer) 
     timestamp = Column(String) 
@@ -34,42 +35,19 @@ class Question(Base):
     downvote = Column(Integer)
 
 class Answer(Base):
+    __tablename__ = "answer"
     id = Column(Integer, primary_key=True, index=True)
     question_id = Column(Integer)
     author_id = Column(Integer)
     setting = Column(Enum("zs", "ic", "human"))
-
     timestamp = Column(String)
     text = Column(Text)
 
 class Rating(Base):
+    __tablename__ = "rating"
     id = Column(Integer, primary_key=True, index=True)
-    text = Column(Text)
-    value = Column(Integer)
+    text = Column(Text) # rationale for the rating
+    value = Column(Integer) # score from 1 to 5
     answer_id = Column(Integer)
     author_id = Column(Integer)
     timestamp = Column(String)
-
-class WikiTextQA(Base):
-    __tablename__ = "wiki_text_qa"
-    id = Column(Integer, primary_key=True, index=True)
-    paragraph = Column(Text) # change to paragraph_hash
-    paragraph_hash = Column(Integer)
-    question = Column(Text) 
-    ans_zs = Column(Text)
-    ans_ic = Column(Text)
-    rating_zs_score = Column(Integer)
-    rating_zs_rationale = Column(Text)
-    rating_ic_score = Column(Integer)
-    rating_ic_rationale = Column(Text)
-    scope = Column(Text, default="single-paragraph")
-    hash = Column(String)
-
-    def __hash__(self):
-        data = f"{self.paragraph}{self.question}{self.ans_zs}{self.ans_ic}".encode('utf-8')
-        return hashlib.sha256(data).hexdigest()
-
-    def __eq__(self, other):
-        if isinstance(other, WikiTextQA):
-            return self.hash == other.hash
-        return False

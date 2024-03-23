@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from fleecekmbackend.db.helpers import get_random_samples_raw
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from fleecekmbackend.db.models import WikiTextParagraph
+from fleecekmbackend.db.models import Paragraph
 from fleecekmbackend.db.ctl import get_db
 
 router = APIRouter()
@@ -13,7 +13,7 @@ async def random_samples(n: int, db: AsyncSession = Depends(get_db)):
     return samples
 
 async def get_random_samples_raw(n: int, db: AsyncSession):
-    query = select(WikiTextParagraph).order_by(func.random()).limit(n)
+    query = select(Paragraph).order_by(func.random()).limit(n)
     result = await db.execute(query)
     samples = result.scalars().all()
     return samples

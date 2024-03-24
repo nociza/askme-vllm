@@ -1,10 +1,14 @@
+import logging
+import asyncio
+
 from fastapi import FastAPI
+
 from fleecekmbackend.api.dataset.raw import router as raw_dataset_router
 from fleecekmbackend.api.dataset.qa import router as qa_dataset_router
 from fleecekmbackend.db.ctl import create_tables_if_not_exist
 from fleecekmbackend.db.helpers import load_csv_data
 from fleecekmbackend.core.config import DATASET_PATH
-import logging
+from fleecekmbackend.services.dataset.async_generate_qa import test_process_all_pages
 
 app = FastAPI()
 

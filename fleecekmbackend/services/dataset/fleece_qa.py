@@ -25,33 +25,39 @@ async def process_paragraphs(db: AsyncSession, paragraphs: List[Paragraph]) -> T
     generated_questions = []
     generated_answers = []
     generated_ratings = []
+    try:
+        for paragraph in paragraphs:
+            try:
+                async with db.begin():
+                    # Generate questions
+                    questions = await generate_questions(db, paragraph)
+                    generated_questions.extend(questions)
 
-    for paragraph in paragraphs:
-        try:
-            # Generate questions
-            questions = await generate_questions(db, paragraph)
-            generated_questions.extend(questions)
+                    for question in questions:
+                        try:
+                            async with db.begin_nested():
+                                # Generate answers
+                                for setting in ["zs", "ic"]:
+                                    answer = await generate_answer(db, question, setting)
+                                    generated_answers.append(answer)
 
-            for question in questions:
-                try:
-                    # Generate answers
-                    for setting in ["zs", "ic"]:
-                        answer = await generate_answer(db, question, setting)
-                        generated_answers.append(answer)
+                                    # Generate answer ratings
+                                    rating = await generate_answer_rating(db, question, answer)
+                                    generated_ratings.append(rating)
 
-                        # Generate answer ratings
-                        rating = await generate_answer_rating(db, question, answer)
-                        generated_ratings.append(rating)
+                        except Exception as e:
+                            logging.error(f"Error processing question: {question.text}")
+                            logging.error(str(e))
+                            raise
 
-                except Exception as e:
-                    logging.error(f"Error processing question: {question.text}")
-                    logging.error(str(e))
-                    db.rollback()
+            except Exception as e:
+                logging.error(f"Error processing paragraph: {paragraph.id}")
+                logging.error(str(e))
+                raise
 
-        except Exception as e:
-            logging.error(f"Error processing paragraph: {paragraph.id}")
-            logging.error(str(e))
-            db.rollback()
+    except Exception as e:
+        await db.rollback()
+        raise
 
     return generated_questions, generated_answers, generated_ratings
 

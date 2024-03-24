@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from fleecekmbackend.core.config import DATABASE_URL
 
 engine = create_async_engine(DATABASE_URL)
-async_session = sessionmaker(autocommit=False, autoflush=False, bind=engine, class_=AsyncSession)
+async_session = sessionmaker(engine, class_=AsyncSession)
 Base = declarative_base()
 
 async def get_db():

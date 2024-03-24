@@ -1,6 +1,7 @@
 import re
 import time
 import logging
+import asyncio
 
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -115,8 +116,11 @@ async def generate_questions(
             "PROMPT_SUFFIX": PROMPT_SUFFIX,
         },
     )
+
     author = await create_author_if_not_exists(db, template, MODEL)
     
+    print(f"Generating questions for paragraph: {paragraph.id}")
+
     # helper function to generate questions
     async def generate_or_regenerate_questions(existing_questions):
         existing = ""
@@ -147,7 +151,8 @@ async def generate_questions(
     while len(good_questions) < k and attempts < max_attempts:
         attempts += 1
         questions = await generate_or_regenerate_questions(good_questions)
-        good_questions = [q for q in questions if (await is_answerable(q))]
+        is_answerable_results = await asyncio.gather(*[is_answerable(q) for q in questions])
+        good_questions = [q for q, is_answerable_result in zip(questions, is_answerable_results) if is_answerable_result]
     if len(good_questions) < k:
         raise Exception(
             f"Cannot get {k} questions to the correct format after {max_attempts} attempts"

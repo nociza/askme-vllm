@@ -96,11 +96,14 @@ async def get_page_raw(db: AsyncSession, index: int = -1):
     return samples
 
 async def create_author_if_not_exists(db: AsyncSession, prompt: str, model: str):
-    author = db.query(Author).filter(Author.model == model, Author.prompt == prompt).first()
+    result = await db.execute(select(Author).filter(Author.model == model, Author.prompt == prompt))
+    author = result.scalar()
     if author is None:
         author = Author(model=model, prompt=prompt)
         db.add(author)
         await db.commit()
+        print("Author created successfully: " + str(author.id))
+        print()
     return author
         
         

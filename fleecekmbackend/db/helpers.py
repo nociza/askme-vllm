@@ -72,6 +72,14 @@ async def get_random_samples_raw_as_df(n: int, db: AsyncSession):
     df = df.drop(columns=['_sa_instance_state'])
     return df
 
+async def get_random_unprocessed_paragraph(db: AsyncSession):
+    query = select(Paragraph).filter(Paragraph.processed == -1).order_by(func.random()).limit(1)
+    result = await db.execute(query)
+    paragraph = result.scalar()
+    if paragraph is None:
+        return -1
+    return paragraph
+
 async def get_page_raw(db: AsyncSession, index: int = -1):
     if index == -1: # get all the paragraphs with the same (randomly selected) page_name
         query = select(Paragraph.page_name).distinct().order_by(func.random()).limit(1)
@@ -87,12 +95,12 @@ async def get_page_raw(db: AsyncSession, index: int = -1):
     samples = result.scalars().all()
     return samples
 
-def create_author_if_not_exists(db: AsyncSession, prompt: str, model: str):
+async def create_author_if_not_exists(db: AsyncSession, prompt: str, model: str):
     author = db.query(Author).filter(Author.model == model, Author.prompt == prompt).first()
     if author is None:
         author = Author(model=model, prompt=prompt)
         db.add(author)
-        db.commit()
+        await db.commit()
     return author
         
         

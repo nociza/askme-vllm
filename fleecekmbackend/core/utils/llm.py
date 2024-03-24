@@ -20,7 +20,7 @@ def randwait(wait, offset=0.1):
     return random.random() * wait + offset
 
 
-def llm_safe_request(
+async def llm_safe_request(
     prompt,
     model,
     stop,
@@ -38,7 +38,7 @@ def llm_safe_request(
             prompt = prompt_prefix + " " + prompt
         if prompt_suffix:
             prompt = prompt + " " + prompt_suffix
-        return together.Complete.create( #TODO: Change this to use gpublaze
+        return await together.Complete.create( #TODO: Change this to use gpublaze
             prompt=prompt,
             model=model,
             max_tokens=max_tokens,
@@ -54,7 +54,7 @@ def llm_safe_request(
                 f"Cannot get the response after max_attempts. \n Prompt: ", prompt
             )
         time.sleep(randwait(WAIT))
-        return llm_safe_request(
+        return await llm_safe_request(
             prompt,
             model,
             max_tokens,

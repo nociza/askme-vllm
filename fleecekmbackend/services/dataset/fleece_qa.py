@@ -19,7 +19,39 @@ PROMPT_PREFIX, PROMPT_SUFFIX = ["[INST]", "[/INST]"]
 NUMQUESTIONS = 3
 MAX_ATTEMPTS = 5
 
-############################ Main Function ###############################
+############################ Main Functions ############################
+async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[List[Question], List[Answer], List[Rating]]:
+    generated_questions = []
+    generated_answers = []
+    generated_ratings = []
+    try:
+        print(f"Processing paragraph: {paragraph.id}")
+
+        questions = await generate_questions(db, paragraph)
+
+        print(f"generated_questions: {questions}")
+
+        generated_questions.extend(questions)
+        for question in questions:
+            try:
+                async with db.begin_nested():
+                    # Generate answers
+                    for setting in ["zs", "ic"]:
+                        answer = await generate_answer(db, question, setting)
+                        generated_answers.append(answer)
+
+                        # Generate answer ratings
+                        rating = await generate_answer_rating(db, question, answer)
+                        generated_ratings.append(rating)
+
+            except Exception as e:
+                logging.error(f"Error processing question: {question.text}")
+                logging.error(str(e))
+                raise
+    except Exception as e:
+        await db.rollback()
+        raise
+    return generated_questions, generated_answers, generated_ratings
 
 async def process_paragraphs(db: AsyncSession, paragraphs: List[Paragraph]) -> Tuple[List[Question], List[Answer], List[Rating]]:
     generated_questions = []
@@ -83,10 +115,10 @@ async def generate_questions(
             "PROMPT_SUFFIX": PROMPT_SUFFIX,
         },
     )
-    author = create_author_if_not_exists(db, template, MODEL)
+    author = await create_author_if_not_exists(db, template, MODEL)
     
     # helper function to generate questions
-    def generate_or_regenerate_questions(existing_questions):
+    async def generate_or_regenerate_questions(existing_questions):
         existing = ""
         for i, q in enumerate(existing_questions):
             existing += f"{i+1}. {q}\n"
@@ -101,7 +133,7 @@ async def generate_questions(
             },
         )
         time.sleep(randwait(WAIT))
-        output = llm_safe_request(prompt, MODEL, STOP)
+        output = await llm_safe_request(prompt, MODEL, STOP)
         new_questions = [
             x[2:].strip()
             for x in output["output"]["choices"][0]["text"].strip().split("\n")
@@ -115,7 +147,7 @@ async def generate_questions(
     while len(good_questions) < k and attempts < max_attempts:
         attempts += 1
         questions = await generate_or_regenerate_questions(good_questions)
-        good_questions = [q for q in questions if is_answerable(q)]
+        good_questions = [q for q in questions if (await is_answerable(q))]
     if len(good_questions) < k:
         raise Exception(
             f"Cannot get {k} questions to the correct format after {max_attempts} attempts"
@@ -166,14 +198,14 @@ async def generate_answer(
             "PROMPT_SUFFIX": PROMPT_SUFFIX,
         },
     )
-    author = create_author_if_not_exists(db, template, MODEL)
+    author = await create_author_if_not_exists(db, template, MODEL)
 
     # main loop
     attempts = 0
     while attempts < max_attempts:
         attempts += 1
         time.sleep(randwait(WAIT))
-        output = llm_safe_request(prompt, MODEL, STOP)
+        output = await llm_safe_request(prompt, MODEL, STOP)
         answer_text = output["output"]["choices"][0]["text"].strip()
 
         if answer_text:
@@ -216,14 +248,14 @@ async def generate_answer_rating(
         },
     )
 
-    author = create_author_if_not_exists(db, template, MODEL)
+    author = await create_author_if_not_exists(db, template, MODEL)
 
     # main loop
     attempts = 0
     while attempts < max_attempts:
         attempts += 1
         time.sleep(randwait(WAIT))
-        output = llm_safe_request(prompt, MODEL, STOP)
+        output = await llm_safe_request(prompt, MODEL, STOP)
         rating_raw = output["output"]["choices"][0]["text"]
 
         if re.search(r"Rationale:", rating_raw, re.I) and re.search(r"[0-5]", rating_raw):
@@ -256,12 +288,12 @@ def generate_fact_with_context(paragraph: Paragraph):
         context = f"In an article about {paragraph.page_name}, section {paragraph.section_name}"
     return context, f"{context} mentioned: {paragraph.text}" 
 
-def is_answerable(question):
+async def is_answerable(question):
     if not question.strip():
         logging.debug("No question seen in is_answerable: ", question.strip())
         return False
     time.sleep(randwait(WAIT))
-    output = llm_safe_request(
+    output = await llm_safe_request(
         f"Is the following a well-formed question? Reply 'YES' and 'NO' only: \n\n {question}",
         MODEL,
         STOP,

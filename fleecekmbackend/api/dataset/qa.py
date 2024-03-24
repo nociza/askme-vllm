@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from fleecekmbackend.db.helpers import get_random_samples_raw_as_df
 from fleecekmbackend.db.ctl import get_db
-from fleecekmbackend.services.dataset.fleece_qa import process_row
+from fleecekmbackend.services.dataset.fleece_qa import process_paragraphs
 from fleecekmbackend.db.models import Paragraph, Author, Question, Answer, Rating
 from sqlalchemy import func, select
 import logging
@@ -30,7 +30,7 @@ async def random_samples_create(n: int, db: Session = Depends(get_db)):
         try:
             processed_qa_objs = []
             for _, sample in samples_df.iterrows():
-                processed_qa_obj = await process_row(sample)
+                processed_qa_obj = await process_paragraphs(sample)
                 
                 # Check if the paragraph already exists
                 existing_paragraph = db.query(Paragraph).filter_by(id=processed_qa_obj.paragraph_id).first()

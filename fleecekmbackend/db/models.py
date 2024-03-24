@@ -16,6 +16,8 @@ class Paragraph(Base): # change to paragraph
     is_bad = Column(Boolean) # change to llm_quality_check or similar
     within_page_order = Column(Integer)
 
+    processed = Column(Integer, default=-1) # -1 for not processed, > 0 for processed and order
+
 class Author(Base):
     __tablename__ = "author"
     id = Column(Integer, primary_key=True, index=True)

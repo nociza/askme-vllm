@@ -17,9 +17,7 @@ async def create_tables():
 
 async def create_tables_if_not_exist():
     async with engine.begin() as conn:
-        existing_tables = await conn.run_sync(lambda conn: list(Base.metadata.tables.keys()))
-        if not existing_tables:
-            await create_tables()
+        await create_tables()
 
 async def delete_tables():
     async with engine.begin() as conn:

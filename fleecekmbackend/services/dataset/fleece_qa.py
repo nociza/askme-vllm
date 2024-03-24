@@ -19,6 +19,43 @@ PROMPT_PREFIX, PROMPT_SUFFIX = ["[INST]", "[/INST]"]
 NUMQUESTIONS = 3
 MAX_ATTEMPTS = 5
 
+############################ Main Function ###############################
+
+async def process_paragraphs(db: AsyncSession, paragraphs: List[Paragraph]) -> Tuple[List[Question], List[Answer], List[Rating]]:
+    generated_questions = []
+    generated_answers = []
+    generated_ratings = []
+
+    for paragraph in paragraphs:
+        try:
+            # Generate questions
+            questions = await generate_questions(db, paragraph)
+            generated_questions.extend(questions)
+
+            for question in questions:
+                try:
+                    # Generate answers
+                    for setting in ["zs", "ic"]:
+                        answer = await generate_answer(db, question, setting)
+                        generated_answers.append(answer)
+
+                        # Generate answer ratings
+                        rating = await generate_answer_rating(db, question, answer)
+                        generated_ratings.append(rating)
+
+                except Exception as e:
+                    logging.error(f"Error processing question: {question.text}")
+                    logging.error(str(e))
+                    db.rollback()
+
+        except Exception as e:
+            logging.error(f"Error processing paragraph: {paragraph.id}")
+            logging.error(str(e))
+            db.rollback()
+
+    return generated_questions, generated_answers, generated_ratings
+
+############################ Generation Functions ############################
 # Generate questions for a paragraph
 async def generate_questions(
     db: AsyncSession,
@@ -202,42 +239,6 @@ async def generate_answer_rating(
     raise Exception(
         f"Cannot rate answers to the correct format after {max_attempts} attempts."
     )
-
-############################ Main Functions ##############################
-
-async def process_paragraphs(db: AsyncSession, paragraphs: List[Paragraph]) -> Tuple[List[Question], List[Answer], List[Rating]]:
-    generated_questions = []
-    generated_answers = []
-    generated_ratings = []
-
-    for paragraph in paragraphs:
-        try:
-            # Generate questions
-            questions = await generate_questions(db, paragraph)
-            generated_questions.extend(questions)
-
-            for question in questions:
-                try:
-                    # Generate answers
-                    for setting in ["zs", "ic"]:
-                        answer = await generate_answer(db, question, setting)
-                        generated_answers.append(answer)
-
-                        # Generate answer ratings
-                        rating = await generate_answer_rating(db, question, answer)
-                        generated_ratings.append(rating)
-
-                except Exception as e:
-                    logging.error(f"Error processing question: {question.text}")
-                    logging.error(str(e))
-                    db.rollback()
-
-        except Exception as e:
-            logging.error(f"Error processing paragraph: {paragraph.id}")
-            logging.error(str(e))
-            db.rollback()
-
-    return generated_questions, generated_answers, generated_ratings
 
 ############################ Helper Functions ############################
 def generate_fact_with_context(paragraph: Paragraph):

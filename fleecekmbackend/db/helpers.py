@@ -1,4 +1,4 @@
-from fleecekmbackend.db.ctl import async_session
+from fleecekmbackend.db.ctl import async_session, engine
 from fleecekmbackend.db.models import Paragraph, Author
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -95,16 +95,16 @@ async def get_page_raw(db: AsyncSession, index: int = -1):
     samples = result.scalars().all()
     return samples
 
-async def create_author_if_not_exists(db: AsyncSession, prompt: str, model: str):
-    result = await db.execute(select(Author).filter(Author.model == model, Author.prompt == prompt))
-    author = result.scalar()
-    if author is None:
-        author = Author(model=model, prompt=prompt)
-        db.add(author)
-        await db.commit()
-        print("Author created successfully: " + str(author.id))
-        print()
-    return author
+async def create_author_if_not_exists(prompt: str, model: str):
+    async with async_session() as db:
+        result = await db.execute(select(Author).filter(Author.model == model, Author.prompt == prompt))
+        author = result.scalar()
+        if author is None:
+            author = Author(model=model, prompt=prompt)
+            db.add(author)
+            await db.commit()
+            await db.refresh(author, ["id"])
+        return author
         
         
 

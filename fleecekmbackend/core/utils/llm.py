@@ -38,7 +38,7 @@ async def llm_safe_request(
             prompt = prompt_prefix + " " + prompt
         if prompt_suffix:
             prompt = prompt + " " + prompt_suffix
-        return await together.Complete.create( #TODO: Change this to use gpublaze
+        return together.Complete.create( #TODO: Change this to use gpublaze
             prompt=prompt,
             model=model,
             max_tokens=max_tokens,

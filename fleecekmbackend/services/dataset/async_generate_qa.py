@@ -4,7 +4,7 @@ from typing import List, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import distinct, func, select, delete
 
-from fleecekmbackend.db.ctl import async_session
+from fleecekmbackend.db.ctl import engine
 from fleecekmbackend.db.helpers import get_random_unprocessed_paragraph
 from fleecekmbackend.services.dataset.fleece_qa import process_paragraph
 from fleecekmbackend.db.models import Paragraph, Question, Answer, Rating, Author
@@ -41,7 +41,7 @@ async def process_all_pages(db: AsyncSession):
         logging.error(str(e))
 
 async def test_process_all_pages():
-    async with async_session() as db:
+    async with AsyncSession(engine) as db:
         # Clean up the database
         print("Cleaning up the database...")
 

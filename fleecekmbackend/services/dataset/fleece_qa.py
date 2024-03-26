@@ -117,7 +117,7 @@ async def generate_questions(
         },
     )
 
-    author = await create_author_if_not_exists(db, template, MODEL)
+    author = await create_author_if_not_exists(template, MODEL)
     
     print(f"Generating questions for paragraph: {paragraph.id}")
 
@@ -136,8 +136,10 @@ async def generate_questions(
                 "PROMPT_SUFFIX": PROMPT_SUFFIX,
             },
         )
+        print(f"Prompt: {prompt}")
         time.sleep(randwait(WAIT))
         output = await llm_safe_request(prompt, MODEL, STOP)
+        print(f"Generated questions: {output['output']['choices'][0]['text']}")
         new_questions = [
             x[2:].strip()
             for x in output["output"]["choices"][0]["text"].strip().split("\n")
@@ -203,7 +205,7 @@ async def generate_answer(
             "PROMPT_SUFFIX": PROMPT_SUFFIX,
         },
     )
-    author = await create_author_if_not_exists(db, template, MODEL)
+    author = await create_author_if_not_exists(template, MODEL)
 
     # main loop
     attempts = 0
@@ -253,7 +255,7 @@ async def generate_answer_rating(
         },
     )
 
-    author = await create_author_if_not_exists(db, template, MODEL)
+    author = await create_author_if_not_exists(template, MODEL)
 
     # main loop
     attempts = 0

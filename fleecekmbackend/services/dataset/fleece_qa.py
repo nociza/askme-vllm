@@ -13,7 +13,7 @@ from fleecekmbackend.db.helpers import create_author_if_not_exists
 from fleecekmbackend.core.utils.llm import llm_safe_request, randwait, generate_prompts_from_template
 
 WAIT = 0.5
-MODEL = "togethercomputer/llama-2-70b-chat"
+MODEL = "mistralai/Mixtral-8x7B-Instruct-v0.1"
 STOP = ["[/INST]", "</s>"]
 PROMPT_PREFIX, PROMPT_SUFFIX = ["[INST]", "[/INST]"]
 
@@ -138,11 +138,11 @@ async def generate_questions(
         )
         print(f"Prompt: {prompt}")
         time.sleep(randwait(WAIT))
-        output = await llm_safe_request(prompt, MODEL, STOP)
-        print(f"Generated questions: {output['output']['choices'][0]['text']}")
+        output = llm_safe_request(prompt, MODEL, STOP)
+        print(f"Generated questions: {output['choices'][0]['message']['content']}")
         new_questions = [
             x[2:].strip()
-            for x in output["output"]["choices"][0]["text"].strip().split("\n")
+            for x in output["choices"][0]['message']['content'].strip().split("\n")
             if re.match(r"^[0-9]\.", x)
         ]
         return existing_questions + new_questions
@@ -153,7 +153,12 @@ async def generate_questions(
     while len(good_questions) < k and attempts < max_attempts:
         attempts += 1
         questions = await generate_or_regenerate_questions(good_questions)
-        is_answerable_results = await asyncio.gather(*[is_answerable(q) for q in questions])
+        print()
+        print(f"Generated Questions {attempts}: {questions}")
+        is_answerable_results = []
+        for q in questions:
+            is_answerable_results.append(await is_answerable(q))
+        print(f"Is Answerable Results {attempts}: {is_answerable_results}")
         good_questions = [q for q, is_answerable_result in zip(questions, is_answerable_results) if is_answerable_result]
     if len(good_questions) < k:
         raise Exception(
@@ -212,8 +217,8 @@ async def generate_answer(
     while attempts < max_attempts:
         attempts += 1
         time.sleep(randwait(WAIT))
-        output = await llm_safe_request(prompt, MODEL, STOP)
-        answer_text = output["output"]["choices"][0]["text"].strip()
+        output = llm_safe_request(prompt, MODEL, STOP)
+        answer_text = output["output"]["choices"][0]['message']['content'].strip()
 
         if answer_text:
             answer = Answer(
@@ -262,8 +267,8 @@ async def generate_answer_rating(
     while attempts < max_attempts:
         attempts += 1
         time.sleep(randwait(WAIT))
-        output = await llm_safe_request(prompt, MODEL, STOP)
-        rating_raw = output["output"]["choices"][0]["text"]
+        output = llm_safe_request(prompt, MODEL, STOP)
+        rating_raw = output["output"]["choices"][0]['message']['content']
 
         if re.search(r"Rationale:", rating_raw, re.I) and re.search(r"[0-5]", rating_raw):
             score = int(re.search(r"[0-5]", rating_raw).group())
@@ -300,14 +305,14 @@ async def is_answerable(question):
         logging.debug("No question seen in is_answerable: ", question.strip())
         return False
     time.sleep(randwait(WAIT))
-    output = await llm_safe_request(
+    output = llm_safe_request(
         f"Is the following a well-formed question? Reply 'YES' and 'NO' only: \n\n {question}",
         MODEL,
         STOP,
         prompt_prefix=PROMPT_PREFIX,
         prompt_suffix=PROMPT_SUFFIX,
     )
-    answer = output["output"]["choices"][0]["text"].strip()
+    answer = output["output"]["choices"][0]["message"]["content"].strip()
     if answer.strip().startswith(("NO", "no", "No")):
         return False
     elif answer.strip().startswith(("YES", "Yes", "yes")):

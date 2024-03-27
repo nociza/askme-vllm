@@ -157,7 +157,8 @@ async def generate_questions(
         print(f"Generated Questions {attempts}: {questions}")
         is_answerable_results = []
         for q in questions:
-            is_answerable_results.append(await is_answerable(q))
+            print(f"Checking if answerable: {q}")
+            is_answerable_results.append(is_answerable(q))
         print(f"Is Answerable Results {attempts}: {is_answerable_results}")
         good_questions = [q for q, is_answerable_result in zip(questions, is_answerable_results) if is_answerable_result]
     if len(good_questions) < k:
@@ -300,7 +301,7 @@ def generate_fact_with_context(paragraph: Paragraph):
         context = f"In an article about {paragraph.page_name}, section {paragraph.section_name}"
     return context, f"{context} mentioned: {paragraph.text}" 
 
-async def is_answerable(question):
+def is_answerable(question):
     if not question.strip():
         logging.debug("No question seen in is_answerable: ", question.strip())
         return False
@@ -312,10 +313,10 @@ async def is_answerable(question):
         prompt_prefix=PROMPT_PREFIX,
         prompt_suffix=PROMPT_SUFFIX,
     )
-    answer = output["output"]["choices"][0]["message"]["content"].strip()
-    if answer.strip().startswith(("NO", "no", "No")):
+    answer = output["choices"][0]["message"]["content"].strip()
+    if answer.startswith(("NO", "no", "No")):
         return False
-    elif answer.strip().startswith(("YES", "Yes", "yes")):
+    elif answer.startswith(("YES", "Yes", "yes")):
         return True
     logging.info("Question Malformed: ", answer)
     return False

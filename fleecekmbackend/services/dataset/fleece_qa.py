@@ -219,7 +219,7 @@ async def generate_answer(
         attempts += 1
         time.sleep(randwait(WAIT))
         output = llm_safe_request(prompt, MODEL, STOP)
-        answer_text = output["output"]["choices"][0]['message']['content'].strip()
+        answer_text = output["choices"][0]['message']['content'].strip()
 
         if answer_text:
             answer = Answer(
@@ -269,7 +269,7 @@ async def generate_answer_rating(
         attempts += 1
         time.sleep(randwait(WAIT))
         output = llm_safe_request(prompt, MODEL, STOP)
-        rating_raw = output["output"]["choices"][0]['message']['content']
+        rating_raw = output["choices"][0]['message']['content']
 
         if re.search(r"Rationale:", rating_raw, re.I) and re.search(r"[0-5]", rating_raw):
             score = int(re.search(r"[0-5]", rating_raw).group())

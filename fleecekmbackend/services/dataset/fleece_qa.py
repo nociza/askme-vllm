@@ -122,7 +122,7 @@ async def generate_questions(
     print(f"Generating questions for paragraph: {paragraph.id}")
 
     # helper function to generate questions
-    async def generate_or_regenerate_questions(existing_questions):
+    def generate_or_regenerate_questions(existing_questions):
         existing = ""
         for i, q in enumerate(existing_questions):
             existing += f"{i+1}. {q}\n"
@@ -152,7 +152,7 @@ async def generate_questions(
     attempts = 0
     while len(good_questions) < k and attempts < max_attempts:
         attempts += 1
-        questions = await generate_or_regenerate_questions(good_questions)
+        questions = generate_or_regenerate_questions(good_questions)
         print()
         print(f"Generated Questions {attempts}: {questions}")
         is_answerable_results = []
@@ -161,11 +161,15 @@ async def generate_questions(
             is_answerable_results.append(is_answerable(q))
         print(f"Is Answerable Results {attempts}: {is_answerable_results}")
         good_questions = [q for q, is_answerable_result in zip(questions, is_answerable_results) if is_answerable_result]
+        print(f"Good Questions {attempts}: {good_questions}")
     if len(good_questions) < k:
+        print(f"Failed to get {k} questions after {max_attempts} attempts, current number of questions: {len(good_questions)}")
         raise Exception(
             f"Cannot get {k} questions to the correct format after {max_attempts} attempts"
         )
     
+    print(f"Good Questions: {good_questions}")
+
     # Add questions to the database
     for q in good_questions:
         question = Question(
@@ -178,8 +182,10 @@ async def generate_questions(
             upvote=0,
             downvote=0,
         )
-        db.add(question)
-        await db.commit()
+        print(f"Adding question: {question.text}")
+        async with async_session() as session:
+            session.add(question)
+            await session.commit()
     return good_questions
 
 async def generate_answer(

@@ -35,15 +35,14 @@ async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[Lis
         generated_questions.extend(questions)
         for question in questions:
             try:
-                async with db.begin_nested():
+                for setting in ["zs", "ic"]:
                     # Generate answers
-                    for setting in ["zs", "ic"]:
-                        answer = await generate_answer(db, question, setting)
-                        generated_answers.append(answer)
+                    answer = await generate_answer(db, question, setting)
+                    generated_answers.append(answer)
 
-                        # Generate answer ratings
-                        rating = await generate_answer_rating(db, question, answer)
-                        generated_ratings.append(rating)
+                    # Generate answer ratings
+                    rating = await generate_answer_rating(db, question, answer)
+                    generated_ratings.append(rating)
 
             except Exception as e:
                 logging.error(f"Error processing question: {question.text}")
@@ -170,6 +169,7 @@ async def generate_questions(
     
     print(f"Good Questions: {good_questions}")
 
+    question_objs = []
     # Add questions to the database
     for q in good_questions:
         question = Question(
@@ -186,7 +186,8 @@ async def generate_questions(
         async with async_session() as session:
             session.add(question)
             await session.commit()
-    return good_questions
+        question_objs.append(question)
+    return question_objs
 
 async def generate_answer(
     db: AsyncSession,
@@ -198,7 +199,10 @@ async def generate_answer(
     time.sleep(randwait(WAIT))
     prompt_template = "{PROMPT_PREFIX}{CONTEXT_PROMPT}Answer the following question in a succinct manner: {QUESTION}\n{PROMPT_SUFFIX}"
 
-    paragraph = await db.get(Paragraph, question.paragraph_id)
+    print(f"Generating answer for question: {question.text}")
+
+    async with async_session() as session:
+        paragraph = await session.get(Paragraph, question.paragraph_id)
     _, fact = generate_fact_with_context(paragraph)
 
     if context:
@@ -235,8 +239,10 @@ async def generate_answer(
                 timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 text=answer_text,
             )
-            db.add(answer)
-            await db.commit()
+            print(f"Generated answer: {answer.text}")
+            async with async_session() as session:
+                session.add(answer)
+                await session.commit()
             return answer
 
     raise Exception(

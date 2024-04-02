@@ -100,10 +100,6 @@ async def test_process_all_pages():
             answers = await db.scalars(select(Answer))
             ratings = await db.scalars(select(Rating))
 
-            print(f"Questions: {questions.all()}")
-            print(f"Answers: {answers.all()}")
-            print(f"Ratings: {ratings.all()}")
-
             assert len(questions.all()) == questions.distinct().count()
             assert len(answers.all()) == answers.distinct().count()
             assert len(ratings.all()) == ratings.distinct().count()

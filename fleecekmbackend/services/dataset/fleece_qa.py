@@ -49,6 +49,14 @@ async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[Lis
                 logging.error(f"Error processing question: {question_id.text}")
                 logging.error(str(e))
                 raise
+        
+        paragraph.processed = 1
+        async with async_session() as session:
+            session.add(paragraph)
+            await session.commit()
+            await session.refresh(paragraph, ["processed"])
+            print(f"Processed paragraph: {paragraph.id}")
+
     except Exception as e:
         await db.rollback()
         raise
@@ -262,54 +270,57 @@ async def generate_answer_rating(
     answer_id: int,
     max_attempts: int = MAX_ATTEMPTS,
 ):
-    prompt_template = "{PROMPT_PREFIX}Based on this fact: \n\n `{REFERENCE}` \n\n Rate the following answer to the question - Question: `{QUESTION}` \n\n Answer: `{ANSWER}`; give a number from 0-5 where 0 is 'No answer or completely irrelevant', 1 is 'Significantly incorrect or incomplete', 2 is 'Partially correct; major inaccuracies or omissions', 3 is 'Correct but lacks depth; minimal detail', 4 is 'Mostly correct; minor errors, includes relevant details', 5 is 'Fully accurate and detailed; clear and comprehensive'. Your answer should follow the form `Answer:<number> \n Rationale:<justify your judgment in a paragraph>`. \n{PROMPT_SUFFIX}"
+    try:
+        prompt_template = "{PROMPT_PREFIX}Based on this fact: \n\n `{REFERENCE}` \n\n Rate the following answer to the question - Question: `{QUESTION}` \n\n Answer: `{ANSWER}`; give a number from 0-5 where 0 is 'No answer or completely irrelevant', 1 is 'Significantly incorrect or incomplete', 2 is 'Partially correct; major inaccuracies or omissions', 3 is 'Correct but lacks depth; minimal detail', 4 is 'Mostly correct; minor errors, includes relevant details', 5 is 'Fully accurate and detailed; clear and comprehensive'. Your answer should follow the form `Answer:<number> \n Rationale:<justify your judgment in a paragraph>`. \n{PROMPT_SUFFIX}"
 
-    async with async_session() as session:
-        question = await session.get(Question, question_id)
-        paragraph = await session.get(Paragraph, question.paragraph_id)
-        answer = await session.get(Answer, answer_id)
-        _, reference = generate_fact_with_context(paragraph.text)
+        async with async_session() as session:
+            question = await session.get(Question, question_id)
+            paragraph = await session.get(Paragraph, question.paragraph_id)
+            answer = await session.get(Answer, answer_id)
+            _, reference = generate_fact_with_context(paragraph)
 
-        prompt, template = generate_prompts_from_template(
-            prompt_template,
-            {
-                "REFERENCE": reference,
-                "QUESTION": question.text,
-                "ANSWER": answer.text,
-                "PROMPT_PREFIX": PROMPT_PREFIX,
-                "PROMPT_SUFFIX": PROMPT_SUFFIX,
-            },
+            prompt, template = generate_prompts_from_template(
+                prompt_template,
+                {
+                    "REFERENCE": reference,
+                    "QUESTION": question.text,
+                    "ANSWER": answer.text,
+                    "PROMPT_PREFIX": PROMPT_PREFIX,
+                    "PROMPT_SUFFIX": PROMPT_SUFFIX,
+                },
+            )
+
+            author = await create_author_if_not_exists(template, MODEL)
+
+            # main loop
+            attempts = 0
+            while attempts < max_attempts:
+                attempts += 1
+                time.sleep(randwait(WAIT))
+                output = llm_safe_request(prompt, MODEL, STOP)
+                rating_raw = output["choices"][0]['message']['content']
+
+                if re.search(r"Rationale:", rating_raw, re.I) and re.search(r"[0-5]", rating_raw):
+                    score = int(re.search(r"[0-5]", rating_raw).group())
+                    rationale = "".join(rating_raw.split("Rationale:", re.I)[1:]).strip()
+
+                    rating = Rating(
+                        text=rationale,
+                        value=score,
+                        answer_id=answer.id,
+                        author_id=author.id,
+                        timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    )
+                    session.add(rating)
+                    await session.commit()
+                    await session.refresh(rating, ["id"])
+                    return rating.id
+
+        raise Exception(
+            f"Cannot rate answers to the correct format after {max_attempts} attempts."
         )
-
-        author = await create_author_if_not_exists(template, MODEL)
-
-        # main loop
-        attempts = 0
-        while attempts < max_attempts:
-            attempts += 1
-            time.sleep(randwait(WAIT))
-            output = llm_safe_request(prompt, MODEL, STOP)
-            rating_raw = output["choices"][0]['message']['content']
-
-            if re.search(r"Rationale:", rating_raw, re.I) and re.search(r"[0-5]", rating_raw):
-                score = int(re.search(r"[0-5]", rating_raw).group())
-                rationale = "".join(rating_raw.split("Rationale:", re.I)[1:]).strip()
-
-                rating = Rating(
-                    text=rationale,
-                    value=score,
-                    answer_id=answer.id,
-                    author_id=author.id,
-                    timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                )
-                session.add(rating)
-                await session.commit()
-                await session.refresh(rating, ["id"])
-                return rating.id
-
-    raise Exception(
-        f"Cannot rate answers to the correct format after {max_attempts} attempts."
-    )
+    except Exception as e:
+        print(f"An error occurred at generate_answer_rating: {e}")
 
 ############################ Helper Functions ############################
 def generate_fact_with_context(paragraph: Paragraph):

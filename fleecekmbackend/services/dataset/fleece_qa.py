@@ -24,7 +24,8 @@ async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[Lis
     generated_answer_ids = []
     generated_rating_ids = []
     try:
-        logging.info(f"Processing paragraph: {paragraph.id}")
+        paragraph_id = paragraph.id
+        logging.info(f"Processing paragraph: {paragraph_id}")
 
         question_ids = await generate_questions(db, paragraph)
 
@@ -55,11 +56,10 @@ async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[Lis
                 raise Exception("largest_processed is None")
             print("largest_processed: ", largest_processed)
             await session.execute(
-                update(Paragraph).where(Paragraph.id == paragraph.id).values(processed=largest_processed + 1)
+                update(Paragraph).where(Paragraph.id == paragraph_id).values(processed=largest_processed + 1)
             )
             await session.commit()
-            await session.refresh(paragraph, ["processed"])
-            logging.info(f"Processed paragraph: {paragraph.id}")
+            logging.info(f"Processed paragraph: {paragraph_id}")
 
     except Exception as e:
         await db.rollback()

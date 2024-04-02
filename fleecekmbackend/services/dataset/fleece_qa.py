@@ -1,14 +1,14 @@
 import re
 import time
 import logging
-import asyncio
 
 from datetime import datetime
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Tuple
 
 from fleecekmbackend.db.ctl import async_session
-from fleecekmbackend.db.models import Paragraph, Author, Question, Answer, Rating
+from fleecekmbackend.db.models import Paragraph, Question, Answer, Rating
 from fleecekmbackend.db.helpers import create_author_if_not_exists
 from fleecekmbackend.core.utils.llm import llm_safe_request, randwait, generate_prompts_from_template
 
@@ -50,8 +50,11 @@ async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[Lis
                 logging.error(str(e))
                 raise
         
-        paragraph.processed = 1
         async with async_session() as session:
+            largest_processed = (await session.execute(select(func.max(Paragraph.processed)))).scalar()
+            if largest_processed is None:
+                largest_processed = -1
+            paragraph.processed = largest_processed + 1
             session.add(paragraph)
             await session.commit()
             await session.refresh(paragraph, ["processed"])
@@ -208,12 +211,6 @@ async def generate_answer(
     # process prompt template
     async with async_session() as session:
         question = await session.get(Question, question_id)
-
-        print(f"Generating answer for question: {question}")
-        try:
-            print(f"question text: {question.text}")
-        except Exception as e:
-            print(f"Error: {e}")
 
         prompt_template = "{PROMPT_PREFIX}{CONTEXT_PROMPT}Answer the following question in a succinct manner: {QUESTION}\n{PROMPT_SUFFIX}"
 

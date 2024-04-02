@@ -8,7 +8,7 @@ from fleecekmbackend.api.dataset.qa import router as qa_dataset_router
 from fleecekmbackend.db.ctl import create_tables_if_not_exist
 from fleecekmbackend.db.helpers import load_csv_data
 from fleecekmbackend.core.config import DATASET_PATH
-from fleecekmbackend.services.dataset.async_generate_qa import start_background_process_test
+from fleecekmbackend.services.dataset.async_generate_qa import start_background_process
 
 background_process_started = False
 
@@ -26,8 +26,8 @@ async def read_root():
 async def startup_event():
     await create_tables_if_not_exist()
     try:
-        # with open(DATASET_PATH, "r") as file:
-        #     await load_csv_data(file)
+        with open(DATASET_PATH, "r") as file:
+            await load_csv_data(file)
         pass
     except FileNotFoundError:
         logging.error("CSV file not found. Skipping data loading.")
@@ -36,5 +36,5 @@ async def startup_event():
     finally: 
         global background_process_started
         if not background_process_started:
-            asyncio.create_task(start_background_process_test())
+            asyncio.create_task(start_background_process())
             background_process_started = True

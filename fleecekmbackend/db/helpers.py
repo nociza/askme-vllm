@@ -43,6 +43,9 @@ async def load_csv_data(file):
                         index=False,
                     )
                 )
+
+                # make all the paragraphs unprocessed
+                await conn.execute(Paragraph.__table__.update().values(processed=-1))
                 
                 # Commit the data insertion transaction
                 await conn.commit()
@@ -73,12 +76,16 @@ async def get_random_samples_raw_as_df(n: int, db: AsyncSession):
     return df
 
 async def get_random_unprocessed_paragraph(db: AsyncSession):
-    query = select(Paragraph).filter(Paragraph.processed == -1).order_by(func.random()).limit(1)
-    result = await db.execute(query)
-    paragraph = result.scalar()
-    if paragraph is None:
+    try:
+        query = select(Paragraph).filter(Paragraph.processed == -1).order_by(func.random()).limit(1)
+        result = await db.execute(query)
+        paragraph = result.scalar()
+        if paragraph is None:
+            return -1
+        return paragraph
+    except Exception as e:
+        logging.error(f"Error retrieving random unprocessed paragraph: {str(e)}")
         return -1
-    return paragraph
 
 async def get_page_raw(db: AsyncSession, index: int = -1):
     if index == -1: # get all the paragraphs with the same (randomly selected) page_name

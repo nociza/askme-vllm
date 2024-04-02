@@ -15,7 +15,7 @@ async def process_all_pages():
             # Get the last processed page name
             last_processed_paragraph_index = (await db.scalars(select(func.max(Paragraph.processed)))).one_or_none()
             
-            print(f"last_processed_paragraph_index: {last_processed_paragraph_index}")
+            logging.info(f"last_processed_paragraph_index: {last_processed_paragraph_index}")
 
             current_paragraph = await get_random_unprocessed_paragraph(db)
 
@@ -23,11 +23,11 @@ async def process_all_pages():
 
             while current_paragraph != -1:
                 try:
-                    print(f"Processing page {current_paragraph.page_name}...")
+                    logging.info(f"Processing page {current_paragraph.page_name}...")
                     generated_questions, generated_answers, generated_ratings = await process_paragraph(db, current_paragraph)
-                    print(f"generated_questions: {generated_questions}")   
-                    print(f"generated_answers: {generated_answers}")
-                    print(f"generated_ratings: {generated_ratings}")
+                    logging.info(f"generated_questions: {generated_questions}")   
+                    logging.info(f"generated_answers: {generated_answers}")
+                    logging.info(f"generated_ratings: {generated_ratings}")
                     current_paragraph = await get_random_unprocessed_paragraph(db)
                 except Exception as e:
                     logging.error(f"Error processing page {current_paragraph.page_name}")

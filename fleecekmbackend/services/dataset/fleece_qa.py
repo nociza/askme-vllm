@@ -1,12 +1,10 @@
 import re
 import time
 import logging
-
 from datetime import datetime
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Tuple
-
 from fleecekmbackend.db.ctl import async_session
 from fleecekmbackend.db.models import Paragraph, Question, Answer, Rating
 from fleecekmbackend.db.helpers import create_author_if_not_exists
@@ -26,11 +24,11 @@ async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[Lis
     generated_answer_ids = []
     generated_rating_ids = []
     try:
-        print(f"Processing paragraph: {paragraph.id}")
+        logging.info(f"Processing paragraph: {paragraph.id}")
 
         question_ids = await generate_questions(db, paragraph)
 
-        print(f"generated_questions: {question_ids}")
+        logging.info(f"generated_questions: {question_ids}")
 
         generated_question_ids.extend(question_ids)
         for question_id in question_ids:
@@ -39,7 +37,7 @@ async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[Lis
                     # Generate answers
                     answer_id = await generate_answer(db, question_id, setting)
                     generated_answer_ids.append(answer_id)
-                    print(f"generated_answerid: {answer_id}")
+                    logging.info(f"generated_answerid: {answer_id}")
 
                     # Generate answer ratings
                     rating_id = await generate_answer_rating(db, question_id, answer_id)
@@ -54,11 +52,12 @@ async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[Lis
             largest_processed = (await session.execute(select(func.max(Paragraph.processed)))).scalar()
             if largest_processed is None:
                 largest_processed = -1
+            print("largest_processed: ", largest_processed)
             paragraph.processed = largest_processed + 1
             session.add(paragraph)
             await session.commit()
             await session.refresh(paragraph, ["processed"])
-            print(f"Processed paragraph: {paragraph.id}")
+            logging.info(f"Processed paragraph: {paragraph.id}")
 
     except Exception as e:
         await db.rollback()
@@ -130,7 +129,7 @@ async def generate_questions(
 
     author = await create_author_if_not_exists(template, MODEL)
     
-    print(f"Generating questions for paragraph: {paragraph.id}")
+    logging.info(f"Generating questions for paragraph: {paragraph.id}")
 
     # helper function to generate questions
     def generate_or_regenerate_questions(existing_questions):
@@ -147,10 +146,10 @@ async def generate_questions(
                 "PROMPT_SUFFIX": PROMPT_SUFFIX,
             },
         )
-        print(f"Prompt: {prompt}")
+        logging.info(f"Prompt: {prompt}")
         time.sleep(randwait(WAIT))
         output = llm_safe_request(prompt, MODEL, STOP)
-        print(f"Generated questions: {output['choices'][0]['message']['content']}")
+        logging.info(f"Generated questions: {output['choices'][0]['message']['content']}")
         new_questions = [
             x[2:].strip()
             for x in output["choices"][0]['message']['content'].strip().split("\n")
@@ -164,22 +163,21 @@ async def generate_questions(
     while len(good_questions) < k and attempts < max_attempts:
         attempts += 1
         questions = generate_or_regenerate_questions(good_questions)
-        print()
-        print(f"Generated Questions {attempts}: {questions}")
+        logging.info(f"Generated Questions {attempts}: {questions}")
         is_answerable_results = []
         for q in questions:
-            print(f"Checking if answerable: {q}")
+            logging.info(f"Checking if answerable: {q}")
             is_answerable_results.append(is_answerable(q))
-        print(f"Is Answerable Results {attempts}: {is_answerable_results}")
+        logging.info(f"Is Answerable Results {attempts}: {is_answerable_results}")
         good_questions = [q for q, is_answerable_result in zip(questions, is_answerable_results) if is_answerable_result]
-        print(f"Good Questions {attempts}: {good_questions}")
+        logging.info(f"Good Questions {attempts}: {good_questions}")
     if len(good_questions) < k:
-        print(f"Failed to get {k} questions after {max_attempts} attempts, current number of questions: {len(good_questions)}")
+        logging.error(f"Failed to get {k} questions after {max_attempts} attempts, current number of questions: {len(good_questions)}")
         raise Exception(
             f"Cannot get {k} questions to the correct format after {max_attempts} attempts"
         )
     
-    print(f"Good Questions: {good_questions}")
+    logging.info(f"Good Questions: {good_questions}")
 
     question_objs = []
     # Add questions to the database
@@ -194,7 +192,7 @@ async def generate_questions(
             upvote=0,
             downvote=0,
         )
-        print(f"Adding question: {question.text}")
+        logging.info(f"Adding question: {question.text}")
         async with async_session() as session:
             session.add(question)
             await session.commit()
@@ -251,7 +249,7 @@ async def generate_answer(
                     timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     text=answer_text,
                 )
-                print(f"Generated answer: {answer.text}")
+                logging.info(f"Generated answer: {answer.text}")
                 session.add(answer)
                 await session.commit()
                 await session.refresh(answer, ["id"])
@@ -317,7 +315,7 @@ async def generate_answer_rating(
             f"Cannot rate answers to the correct format after {max_attempts} attempts."
         )
     except Exception as e:
-        print(f"An error occurred at generate_answer_rating: {e}")
+        logging.error(f"An error occurred at generate_answer_rating: {e}")
 
 ############################ Helper Functions ############################
 def generate_fact_with_context(paragraph: Paragraph):

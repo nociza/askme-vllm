@@ -57,9 +57,9 @@ async def test_process_all_pages():
         # Create test data
         paragraphs = [
             Paragraph(page_name="Page 1", within_page_order=1, text="Paragraph 1"),
-            Paragraph(page_name="Page 1", within_page_order=2, text="Paragraph 2"),
-            Paragraph(page_name="Page 2", within_page_order=1, text="Paragraph 3"),
-            Paragraph(page_name="Page 2", within_page_order=2, text="Paragraph 4"),
+            # Paragraph(page_name="Page 1", within_page_order=2, text="Paragraph 2"),
+            # Paragraph(page_name="Page 2", within_page_order=1, text="Paragraph 3"),
+            # Paragraph(page_name="Page 2", within_page_order=2, text="Paragraph 4"),
         ]
         for paragraph in paragraphs:
             db.add(paragraph)

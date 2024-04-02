@@ -22,36 +22,37 @@ MAX_ATTEMPTS = 5
 
 ############################ Main Functions ############################
 async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[List[Question], List[Answer], List[Rating]]:
-    generated_questions = []
-    generated_answers = []
-    generated_ratings = []
+    generated_question_ids = []
+    generated_answer_ids = []
+    generated_rating_ids = []
     try:
         print(f"Processing paragraph: {paragraph.id}")
 
-        questions = await generate_questions(db, paragraph)
+        question_ids = await generate_questions(db, paragraph)
 
-        print(f"generated_questions: {questions}")
+        print(f"generated_questions: {question_ids}")
 
-        generated_questions.extend(questions)
-        for question in questions:
+        generated_question_ids.extend(question_ids)
+        for question_id in question_ids:
             try:
                 for setting in ["zs", "ic"]:
                     # Generate answers
-                    answer = await generate_answer(db, question, setting)
-                    generated_answers.append(answer)
+                    answer_id = await generate_answer(db, question_id, setting)
+                    generated_answer_ids.append(answer_id)
+                    print(f"generated_answerid: {answer_id}")
 
                     # Generate answer ratings
-                    rating = await generate_answer_rating(db, question, answer)
-                    generated_ratings.append(rating)
+                    rating_id = await generate_answer_rating(db, question_id, answer_id)
+                    generated_rating_ids.append(rating_id)
 
             except Exception as e:
-                logging.error(f"Error processing question: {question.text}")
+                logging.error(f"Error processing question: {question_id.text}")
                 logging.error(str(e))
                 raise
     except Exception as e:
         await db.rollback()
         raise
-    return generated_questions, generated_answers, generated_ratings
+    return generated_question_ids, generated_answer_ids, generated_rating_ids
 
 async def process_paragraphs(db: AsyncSession, paragraphs: List[Paragraph]) -> Tuple[List[Question], List[Answer], List[Rating]]:
     generated_questions = []
@@ -186,118 +187,125 @@ async def generate_questions(
         async with async_session() as session:
             session.add(question)
             await session.commit()
-        question_objs.append(question)
+            await session.refresh(question, ["id"])
+            question_objs.append(question.id)
     return question_objs
 
 async def generate_answer(
     db: AsyncSession,
-    question: Question,
+    question_id: int,
     context: str = None,
     max_attempts: int = MAX_ATTEMPTS,
 ):
     # process prompt template
-    time.sleep(randwait(WAIT))
-    prompt_template = "{PROMPT_PREFIX}{CONTEXT_PROMPT}Answer the following question in a succinct manner: {QUESTION}\n{PROMPT_SUFFIX}"
-
-    print(f"Generating answer for question: {question.text}")
-
     async with async_session() as session:
+        question = await session.get(Question, question_id)
+
+        print(f"Generating answer for question: {question}")
+        try:
+            print(f"question text: {question.text}")
+        except Exception as e:
+            print(f"Error: {e}")
+
+        prompt_template = "{PROMPT_PREFIX}{CONTEXT_PROMPT}Answer the following question in a succinct manner: {QUESTION}\n{PROMPT_SUFFIX}"
+
         paragraph = await session.get(Paragraph, question.paragraph_id)
-    _, fact = generate_fact_with_context(paragraph)
+        _, fact = generate_fact_with_context(paragraph)
 
-    if context:
-        setting = "ic"
-        context_prompt = f"Using this fact: {fact} \n\n "
-    else:
-        setting = "zs"
-        context_prompt = ""
+        if context:
+            setting = "ic"
+            context_prompt = f"Using this fact: {fact} \n\n "
+        else:
+            setting = "zs"
+            context_prompt = ""
 
-    prompt, template = generate_prompts_from_template(
-        prompt_template,
-        {
-            "CONTEXT_PROMPT": context_prompt,
-            "QUESTION": question.text,
-            "PROMPT_PREFIX": PROMPT_PREFIX,
-            "PROMPT_SUFFIX": PROMPT_SUFFIX,
-        },
-    )
-    author = await create_author_if_not_exists(template, MODEL)
+        prompt, template = generate_prompts_from_template(
+            prompt_template,
+            {
+                "CONTEXT_PROMPT": context_prompt,
+                "QUESTION": question.text,
+                "PROMPT_PREFIX": PROMPT_PREFIX,
+                "PROMPT_SUFFIX": PROMPT_SUFFIX,
+            },
+        )
+        author = await create_author_if_not_exists(template, MODEL)
 
-    # main loop
-    attempts = 0
-    while attempts < max_attempts:
-        attempts += 1
-        time.sleep(randwait(WAIT))
-        output = llm_safe_request(prompt, MODEL, STOP)
-        answer_text = output["choices"][0]['message']['content'].strip()
+        # main loop
+        attempts = 0
+        while attempts < max_attempts:
+            attempts += 1
+            time.sleep(randwait(WAIT))
+            output = llm_safe_request(prompt, MODEL, STOP)
+            answer_text = output["choices"][0]['message']['content'].strip()
 
-        if answer_text:
-            answer = Answer(
-                question_id=question.id,
-                author_id=author.id,
-                setting=setting,
-                timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                text=answer_text,
-            )
-            print(f"Generated answer: {answer.text}")
-            async with async_session() as session:
+            if answer_text:
+                answer = Answer(
+                    question_id=question.id,
+                    author_id=author.id,
+                    setting=setting,
+                    timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    text=answer_text,
+                )
+                print(f"Generated answer: {answer.text}")
                 session.add(answer)
                 await session.commit()
-            return answer
+                await session.refresh(answer, ["id"])
+                return answer.id
 
-    raise Exception(
-        f"Cannot generate a valid answer after {max_attempts} attempts. \n Question: {question.text}"
-    )
+        raise Exception(
+            f"Cannot generate a valid answer after {max_attempts} attempts. \n Question: {question.text}"
+        )
 
 async def generate_answer_rating(
     db: AsyncSession,
-    question: Question,
-    answer: Answer,
+    question_id: int,
+    answer_id: int,
     max_attempts: int = MAX_ATTEMPTS,
 ):
-    # process prompt template
-    time.sleep(randwait(WAIT))
     prompt_template = "{PROMPT_PREFIX}Based on this fact: \n\n `{REFERENCE}` \n\n Rate the following answer to the question - Question: `{QUESTION}` \n\n Answer: `{ANSWER}`; give a number from 0-5 where 0 is 'No answer or completely irrelevant', 1 is 'Significantly incorrect or incomplete', 2 is 'Partially correct; major inaccuracies or omissions', 3 is 'Correct but lacks depth; minimal detail', 4 is 'Mostly correct; minor errors, includes relevant details', 5 is 'Fully accurate and detailed; clear and comprehensive'. Your answer should follow the form `Answer:<number> \n Rationale:<justify your judgment in a paragraph>`. \n{PROMPT_SUFFIX}"
 
-    paragraph = await db.get(Paragraph, question.paragraph_id)
-    _, reference = generate_fact_with_context(paragraph)
+    async with async_session() as session:
+        question = await session.get(Question, question_id)
+        paragraph = await session.get(Paragraph, question.paragraph_id)
+        answer = await session.get(Answer, answer_id)
+        _, reference = generate_fact_with_context(paragraph.text)
 
-    prompt, template = generate_prompts_from_template(
-        prompt_template,
-        {
-            "REFERENCE": reference,
-            "QUESTION": question.text,
-            "ANSWER": answer.text,
-            "PROMPT_PREFIX": PROMPT_PREFIX,
-            "PROMPT_SUFFIX": PROMPT_SUFFIX,
-        },
-    )
+        prompt, template = generate_prompts_from_template(
+            prompt_template,
+            {
+                "REFERENCE": reference,
+                "QUESTION": question.text,
+                "ANSWER": answer.text,
+                "PROMPT_PREFIX": PROMPT_PREFIX,
+                "PROMPT_SUFFIX": PROMPT_SUFFIX,
+            },
+        )
 
-    author = await create_author_if_not_exists(template, MODEL)
+        author = await create_author_if_not_exists(template, MODEL)
 
-    # main loop
-    attempts = 0
-    while attempts < max_attempts:
-        attempts += 1
-        time.sleep(randwait(WAIT))
-        output = llm_safe_request(prompt, MODEL, STOP)
-        rating_raw = output["choices"][0]['message']['content']
+        # main loop
+        attempts = 0
+        while attempts < max_attempts:
+            attempts += 1
+            time.sleep(randwait(WAIT))
+            output = llm_safe_request(prompt, MODEL, STOP)
+            rating_raw = output["choices"][0]['message']['content']
 
-        if re.search(r"Rationale:", rating_raw, re.I) and re.search(r"[0-5]", rating_raw):
-            score = int(re.search(r"[0-5]", rating_raw).group())
-            rationale = "".join(rating_raw.split("Rationale:", re.I)[1:]).strip()
+            if re.search(r"Rationale:", rating_raw, re.I) and re.search(r"[0-5]", rating_raw):
+                score = int(re.search(r"[0-5]", rating_raw).group())
+                rationale = "".join(rating_raw.split("Rationale:", re.I)[1:]).strip()
 
-            rating = Rating(
-                text=rationale,
-                value=score,
-                answer_id=answer.id,
-                author_id=author.id,
-                timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            )
-            db.add(rating)
-            await db.commit()
-
-            return rating
+                rating = Rating(
+                    text=rationale,
+                    value=score,
+                    answer_id=answer.id,
+                    author_id=author.id,
+                    timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                )
+                session.add(rating)
+                await session.commit()
+                await session.refresh(rating, ["id"])
+                return rating.id
 
     raise Exception(
         f"Cannot rate answers to the correct format after {max_attempts} attempts."

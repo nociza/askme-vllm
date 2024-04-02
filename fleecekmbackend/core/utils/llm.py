@@ -1,3 +1,4 @@
+import logging
 import random
 import requests
 import time
@@ -16,7 +17,7 @@ TOP_K = 50
 REPETITION_PENALTY = 1.1
 
 
-def randwait(wait, offset=0.1):
+def randwait(wait, offset=0):
     return random.random() * wait + offset
 
 
@@ -78,6 +79,8 @@ def gpublaze_safe_request(
     prompt_prefix="",
     prompt_suffix="",
 ):
+    # print out all the parameters
+    # print(f"model: {model} \n stop: {stop} \n max_tokens: {max_tokens} \n temperature: {temperature} \n top_p: {top_p} \n top_k: {top_k} \n repetition_penalty: {repetition_penalty} \n max_retries: {max_retries} \n prompt_prefix: {prompt_prefix} \n prompt_suffix: {prompt_suffix}")
     try:
         if prompt_prefix:
             prompt = prompt_prefix + " " + prompt
@@ -108,23 +111,26 @@ def gpublaze_safe_request(
         )
         res.raise_for_status()
         return res.json() 
-    except requests.exceptions.HTTPError:
+    except requests.exceptions.HTTPError as e:
+        logging.error(f"Error: {e}")
         if max_retries <= 0:
             raise Exception(
-                f"Cannot get the response after max_attempts. \n Prompt: ", prompt
+                f"Cannot get the response after max_attempts. \n Prompt: {prompt} \n response: {res.json()}"
             )
         time.sleep(randwait(WAIT))
         return gpublaze_safe_request(
             prompt,
             model,
+            stop,
             max_tokens,
             temperature,
             top_p,
             top_k,
             repetition_penalty,
-            stop,
             max_retries - 1,
-        )
+            prompt_prefix,
+            prompt_suffix,
+        )   
 
 def together_safe_request(
     prompt,
@@ -144,7 +150,7 @@ def together_safe_request(
             prompt = prompt_prefix + " " + prompt
         if prompt_suffix:
             prompt = prompt + " " + prompt_suffix
-        return together.Complete.create( #TODO: Change this to use gpublaze
+        return together.Complete.create(
             prompt=prompt,
             model=model,
             max_tokens=max_tokens,
@@ -163,14 +169,17 @@ def together_safe_request(
         return together_safe_request(
             prompt,
             model,
+            stop,
             max_tokens,
             temperature,
             top_p,
             top_k,
             repetition_penalty,
-            stop,
             max_retries - 1,
+            prompt_prefix,
+            prompt_suffix,
         )
+    
 
 def generate_prompts_from_template(template, variables):
     template_variables = {key: f"<{value.__class__.__name__}>" for key, value in variables.items() if key not in ['PROMPT_PREFIX', 'PROMPT_SUFFIX']}

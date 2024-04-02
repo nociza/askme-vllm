@@ -10,33 +10,30 @@ from fleecekmbackend.services.dataset.fleece_qa import process_paragraph
 from fleecekmbackend.db.models import Paragraph, Question, Answer, Rating, Author
 
 async def process_all_pages():
-    try:
-        async with async_session() as db:
-            # Get the last processed page name
-            last_processed_paragraph_index = (await db.scalars(select(func.max(Paragraph.processed)))).one_or_none()
-            
-            logging.info(f"last_processed_paragraph_index: {last_processed_paragraph_index}")
+    async with async_session() as db:
+        # Get the last processed page name
+        last_processed_paragraph_index = (await db.scalars(select(func.max(Paragraph.processed)))).one_or_none()
+        
+        logging.info(f"last_processed_paragraph_index: {last_processed_paragraph_index}")
 
-            current_paragraph = await get_random_unprocessed_paragraph(db)
+        current_paragraph = await get_random_unprocessed_paragraph(db)
 
-            print(f"current_paragraph: {current_paragraph}")
+        print(f"current_paragraph: {current_paragraph}")
 
-            while current_paragraph != -1:
-                try:
-                    logging.info(f"Processing page {current_paragraph.page_name}...")
-                    generated_questions, generated_answers, generated_ratings = await process_paragraph(db, current_paragraph)
-                    logging.info(f"generated_questions: {generated_questions}")   
-                    logging.info(f"generated_answers: {generated_answers}")
-                    logging.info(f"generated_ratings: {generated_ratings}")
-                    current_paragraph = await get_random_unprocessed_paragraph(db)
-                except Exception as e:
-                    logging.error(f"Error processing page {current_paragraph.page_name}")
-                    logging.error(str(e))
+        while current_paragraph != -1:
+            try:
+                logging.info(f"Processing page {current_paragraph.page_name}...")
+                generated_questions, generated_answers, generated_ratings = await process_paragraph(db, current_paragraph)
+                logging.info(f"generated_questions: {generated_questions}")   
+                logging.info(f"generated_answers: {generated_answers}")
+                logging.info(f"generated_ratings: {generated_ratings}")
+                current_paragraph = await get_random_unprocessed_paragraph(db)
+            except Exception as e:
+                logging.error(f"Error processing page {current_paragraph.page_name}")
+                logging.error(str(e))
+                current_paragraph = await get_random_unprocessed_paragraph(db)
 
-            logging.info("All pages processed successfully.")
-    except Exception as e:
-        logging.error("Error in process_all_pages function:")
-        logging.error(str(e))
+        logging.info("All pages processed successfully.")
 
 async def test_process_all_pages():
     async with AsyncSession(engine) as db:

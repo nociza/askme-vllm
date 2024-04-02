@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 import logging
 
 logging.getLogger().addHandler(logging.StreamHandler())
+logging.getLogger().setLevel(logging.INFO)
 router = APIRouter()
 
 @router.get("/rand-sample-create")

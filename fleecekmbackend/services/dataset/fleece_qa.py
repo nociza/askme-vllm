@@ -2,7 +2,7 @@ import re
 import time
 import logging
 from datetime import datetime
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Tuple
 from fleecekmbackend.db.ctl import async_session
@@ -42,6 +42,7 @@ async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[Lis
                     # Generate answer ratings
                     rating_id = await generate_answer_rating(db, question_id, answer_id)
                     generated_rating_ids.append(rating_id)
+                    logging.info(f"generated_ratingid: {rating_id}")
 
             except Exception as e:
                 logging.error(f"Error processing question: {question_id.text}")
@@ -51,16 +52,18 @@ async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[Lis
         async with async_session() as session:
             largest_processed = (await session.execute(select(func.max(Paragraph.processed)))).scalar()
             if largest_processed is None:
-                largest_processed = -1
+                raise Exception("largest_processed is None")
             print("largest_processed: ", largest_processed)
-            paragraph.processed = largest_processed + 1
-            session.add(paragraph)
+            await session.execute(
+                update(Paragraph).where(Paragraph.id == paragraph.id).values(processed=largest_processed + 1)
+            )
             await session.commit()
             await session.refresh(paragraph, ["processed"])
             logging.info(f"Processed paragraph: {paragraph.id}")
 
     except Exception as e:
         await db.rollback()
+        logging.error(str(e))
         raise
     return generated_question_ids, generated_answer_ids, generated_rating_ids
 
@@ -100,6 +103,7 @@ async def process_paragraphs(db: AsyncSession, paragraphs: List[Paragraph]) -> T
 
     except Exception as e:
         await db.rollback()
+        logging.error(str(e))
         raise
 
     return generated_questions, generated_answers, generated_ratings
@@ -112,93 +116,97 @@ async def generate_questions(
     k: int = NUMQUESTIONS,
     max_attempts: int = MAX_ATTEMPTS,
 ):
-    # process prompt template
-    time.sleep(randwait(WAIT))
-    prompt_template = "{PROMPT_PREFIX}Generate {NUM_QUESTIONS} additional short answer (DO NOT INCLUDE CHOICES) questions about the facts mentioned in the following paragraph. The questions should be self-contained; meaning you avoid using references such as 'it', 'the game', 'the person', etc., but should directly include the name of the referenced item instead.\n\nExisting questions:\n{EXISTING_QUESTIONS}\n\nParagraph: {PARAGRAPH}\n{PROMPT_SUFFIX}"
-    context, fact = generate_fact_with_context(paragraph)
-    _, template = generate_prompts_from_template(
-        prompt_template,
-        {
-            "NUM_QUESTIONS": k,
-            "EXISTING_QUESTIONS": "",
-            "PARAGRAPH": fact,
-            "PROMPT_PREFIX": PROMPT_PREFIX,
-            "PROMPT_SUFFIX": PROMPT_SUFFIX,
-        },
-    )
-
-    author = await create_author_if_not_exists(template, MODEL)
-    
-    logging.info(f"Generating questions for paragraph: {paragraph.id}")
-
-    # helper function to generate questions
-    def generate_or_regenerate_questions(existing_questions):
-        existing = ""
-        for i, q in enumerate(existing_questions):
-            existing += f"{i+1}. {q}\n"
-        prompt, _ = generate_prompts_from_template(
+    try:
+        # process prompt template
+        time.sleep(randwait(WAIT))
+        prompt_template = "{PROMPT_PREFIX}Generate {NUM_QUESTIONS} additional short answer (DO NOT INCLUDE CHOICES) questions about the facts mentioned in the following paragraph. The questions should be self-contained; meaning you avoid using references such as 'it', 'the game', 'the person', etc., but should directly include the name of the referenced item instead.\n\nExisting questions:\n{EXISTING_QUESTIONS}\n\nParagraph: {PARAGRAPH}\n{PROMPT_SUFFIX}"
+        context, fact = generate_fact_with_context(paragraph)
+        _, template = generate_prompts_from_template(
             prompt_template,
             {
                 "NUM_QUESTIONS": k,
-                "EXISTING_QUESTIONS": existing,
+                "EXISTING_QUESTIONS": "",
                 "PARAGRAPH": fact,
                 "PROMPT_PREFIX": PROMPT_PREFIX,
                 "PROMPT_SUFFIX": PROMPT_SUFFIX,
             },
         )
-        logging.info(f"Prompt: {prompt}")
-        time.sleep(randwait(WAIT))
-        output = llm_safe_request(prompt, MODEL, STOP)
-        logging.info(f"Generated questions: {output['choices'][0]['message']['content']}")
-        new_questions = [
-            x[2:].strip()
-            for x in output["choices"][0]['message']['content'].strip().split("\n")
-            if re.match(r"^[0-9]\.", x)
-        ]
-        return existing_questions + new_questions
 
-    # main loop
-    good_questions = []
-    attempts = 0
-    while len(good_questions) < k and attempts < max_attempts:
-        attempts += 1
-        questions = generate_or_regenerate_questions(good_questions)
-        logging.info(f"Generated Questions {attempts}: {questions}")
-        is_answerable_results = []
-        for q in questions:
-            logging.info(f"Checking if answerable: {q}")
-            is_answerable_results.append(is_answerable(q))
-        logging.info(f"Is Answerable Results {attempts}: {is_answerable_results}")
-        good_questions = [q for q, is_answerable_result in zip(questions, is_answerable_results) if is_answerable_result]
-        logging.info(f"Good Questions {attempts}: {good_questions}")
-    if len(good_questions) < k:
-        logging.error(f"Failed to get {k} questions after {max_attempts} attempts, current number of questions: {len(good_questions)}")
-        raise Exception(
-            f"Cannot get {k} questions to the correct format after {max_attempts} attempts"
-        )
-    
-    logging.info(f"Good Questions: {good_questions}")
+        author = await create_author_if_not_exists(template, MODEL)
 
-    question_objs = []
-    # Add questions to the database
-    for q in good_questions:
-        question = Question(
-            paragraph_id=paragraph.id,
-            scope="single-paragraph",
-            text=q,
-            context=context,
-            author_id=author.id,
-            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            upvote=0,
-            downvote=0,
-        )
-        logging.info(f"Adding question: {question.text}")
-        async with async_session() as session:
-            session.add(question)
-            await session.commit()
-            await session.refresh(question, ["id"])
-            question_objs.append(question.id)
-    return question_objs
+        logging.info(f"Generating questions for paragraph: {paragraph.id}")
+
+        # helper function to generate questions
+        def generate_or_regenerate_questions(existing_questions):
+            existing = ""
+            for i, q in enumerate(existing_questions):
+                existing += f"{i+1}. {q}\n"
+            prompt, _ = generate_prompts_from_template(
+                prompt_template,
+                {
+                    "NUM_QUESTIONS": k,
+                    "EXISTING_QUESTIONS": existing,
+                    "PARAGRAPH": fact,
+                    "PROMPT_PREFIX": PROMPT_PREFIX,
+                    "PROMPT_SUFFIX": PROMPT_SUFFIX,
+                },
+            )
+            logging.info(f"Prompt: {prompt}")
+            time.sleep(randwait(WAIT))
+            output = llm_safe_request(prompt, MODEL, STOP)
+            logging.info(f"Generated questions: {output['choices'][0]['message']['content']}")
+            new_questions = [
+                x[2:].strip()
+                for x in output["choices"][0]['message']['content'].strip().split("\n")
+                if re.match(r"^[0-9]\.", x)
+            ]
+            return existing_questions + new_questions
+
+        # main loop
+        good_questions = []
+        attempts = 0
+        while len(good_questions) < k and attempts < max_attempts:
+            attempts += 1
+            questions = generate_or_regenerate_questions(good_questions)
+            logging.info(f"Generated Questions {attempts}: {questions}")
+            is_answerable_results = []
+            for q in questions:
+                logging.info(f"Checking if answerable: {q}")
+                is_answerable_results.append(is_answerable(q))
+            logging.info(f"Is Answerable Results {attempts}: {is_answerable_results}")
+            good_questions = [q for q, is_answerable_result in zip(questions, is_answerable_results) if is_answerable_result]
+            logging.info(f"Good Questions {attempts}: {good_questions}")
+        if len(good_questions) < k:
+            logging.error(f"Failed to get {k} questions after {max_attempts} attempts, current number of questions: {len(good_questions)}")
+            raise Exception(
+                f"Cannot get {k} questions to the correct format after {max_attempts} attempts"
+            )
+
+        logging.info(f"Good Questions: {good_questions}")
+
+        question_objs = []
+        # Add questions to the database
+        for q in good_questions:
+            question = Question(
+                paragraph_id=paragraph.id,
+                scope="single-paragraph",
+                text=q,
+                context=context,
+                author_id=author.id,
+                timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                upvote=0,
+                downvote=0,
+            )
+            logging.info(f"Adding question: {question.text}")
+            async with async_session() as session:
+                session.add(question)
+                await session.commit()
+                await session.refresh(question, ["id"])
+                question_objs.append(question.id)
+        return question_objs
+    except Exception as e:
+        logging.error(str(e))
+        raise
 
 async def generate_answer(
     db: AsyncSession,

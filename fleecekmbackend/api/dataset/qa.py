@@ -10,13 +10,17 @@ logging.getLogger().addHandler(logging.StreamHandler())
 logging.getLogger().setLevel(logging.INFO)
 router = APIRouter()
 
-@router.get("/random-samples")
-async def random_samples_existing(n: int, db: Session = Depends(get_db)):
+@router.get("/random-sample-r2l")
+async def random_sample_r2l(n: int, db: Session = Depends(get_db)):
     async with async_session() as session:
-        query = select(Question).order_by(func.random()).limit(n)
-        result = await session.execute(query)
-        samples = result.scalars().all()
-        return samples
+        query = select(Paragraph).where(Paragraph.processed != -1).order_by(func.random()).limit(n)
+        paragraph = (await session.execute(query)).scalars().all()
+        # get one random question that's related to the paragraph
+        question = (await session.execute(select(Question).where(Question.paragraph_id == paragraph[0].id))).scalar()
+        return {
+            "paragraph": paragraph[0].text,
+            "question": question.text
+        }
 
 # rate an answer to a question using llm 
 @router.post("/rate-answer")

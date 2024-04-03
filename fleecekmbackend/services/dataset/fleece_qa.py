@@ -38,12 +38,12 @@ async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[Lis
                     # Generate answers
                     answer_id = await generate_answer(db, question_id, setting)
                     generated_answer_ids.append(answer_id)
-                    logging.info(f"generated_answerid: {answer_id}")
+                    logging.info(f"generated_answer_id: {answer_id}")
 
                     # Generate answer ratings
                     rating_id = await generate_answer_rating(db, question_id, answer_id)
                     generated_rating_ids.append(rating_id)
-                    logging.info(f"generated_ratingid: {rating_id}")
+                    logging.info(f"generated_rating_id: {rating_id}")
 
             except Exception as e:
                 logging.error(f"Error processing question: {question_id.text}")

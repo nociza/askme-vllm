@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from fleecekmbackend.db.ctl import get_db, async_session
 from fleecekmbackend.db.models import Paragraph, Question, Answer, Author, Rating
-from fleecekmbackend.services.dataset.fleece_qa import generate_answer_rating
+from fleecekmbackend.services.dataset.fleece_qa import generate_answer_rating, generate_fact_with_context
 from sqlalchemy import func, select
 import logging
 
@@ -15,11 +15,15 @@ async def random_sample_r2l(n: int, db: Session = Depends(get_db)):
     async with async_session() as session:
         query = select(Paragraph).where(Paragraph.processed != -1).order_by(func.random()).limit(n)
         paragraph = (await session.execute(query)).scalars().all()
+        _, fact_with_context = generate_fact_with_context(paragraph[0].text)
         # get one random question that's related to the paragraph
         question = (await session.execute(select(Question).where(Question.paragraph_id == paragraph[0].id))).scalar()
         return {
             "paragraph": paragraph[0].text,
-            "question": question.text
+            "paragraph_id": paragraph[0].id,
+            "fact_with_context": fact_with_context,
+            "question": question.text,
+            "question_id": question.id
         }
 
 # rate an answer to a question using llm 

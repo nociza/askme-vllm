@@ -333,7 +333,7 @@ def generate_fact_with_context(paragraph: Paragraph):
         context = f"In an article about \'{paragraph.page_name}\', section \'{paragraph.section_name}\', subsection \'{paragraph.subsection_name}\'"
     else:
         context = f"In an article about \'{paragraph.page_name}\', section \'{paragraph.section_name}\'"
-    return context, f"{context} mentioned: {paragraph.text}" 
+    return context, f"{context} mentioned: \n {paragraph.text}" 
 
 def is_answerable(question):
     if not question.strip():

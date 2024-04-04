@@ -64,7 +64,7 @@ async def rate_answer(user_name: str, answer: str, question_id: str, db: Session
         if existing_question is None:
             return {"error": "question not found"}
         
-        existing_answer = (await session.execute(select(Answer).where(Answer.question_id == question_id and Answer.author_id == author_id))).scalar()
+        existing_answer = (await session.execute(select(Answer).where(Answer.question_id == question_id, Answer.author_id == author_id, Answer.text == answer))).scalar()
         if existing_answer is not None:
             return {"error": "answer already rated"}
         
@@ -74,10 +74,11 @@ async def rate_answer(user_name: str, answer: str, question_id: str, db: Session
         await session.refresh(answer, ["id"])
         answer_id = answer.id
 
-        rating_id = generate_answer_rating(answer_id, question_id)
-        rating = await session.execute(select(Rating).where(Rating.id == rating_id)).scalar()
+        rating_id = await generate_answer_rating(db, question_id, answer_id)
+        print(rating_id)
+        rating = (await session.execute(select(Rating).where(Rating.id == rating_id))).scalar()
         return {
-            "id": answer_id,
+            "id": rating.id,
             "value": rating.value,
             "text": rating.text
         }

@@ -11,11 +11,11 @@ logging.getLogger().setLevel(logging.INFO)
 router = APIRouter()
 
 @router.get("/random-sample-r2l")
-async def random_sample_r2l(n: int, db: Session = Depends(get_db)):
+async def random_sample_r2l(n: int):
     async with async_session() as session:
         query = select(Paragraph).where(Paragraph.processed != -1).order_by(func.random()).limit(n)
         paragraph = (await session.execute(query)).scalars().all()
-        _, fact_with_context = generate_fact_with_context(paragraph[0].text)
+        _, fact_with_context = generate_fact_with_context(paragraph[0])
         # get one random question that's related to the paragraph
         question = (await session.execute(select(Question).where(Question.paragraph_id == paragraph[0].id))).scalar()
         return {
@@ -24,6 +24,25 @@ async def random_sample_r2l(n: int, db: Session = Depends(get_db)):
             "fact_with_context": fact_with_context,
             "question": question.text,
             "question_id": question.id
+        }
+
+@router.get("/answer-generated")
+async def answer_generated(question_id: str):
+    async with async_session() as session:
+        question = (await session.execute(select(Question).where(Question.id == question_id))).scalar()
+        if question is None:
+            return {"error": "question not found"}
+        answer = (await session.execute(select(Answer).where(Answer.question_id == question_id))).scalar()
+        if answer is None:
+            return {"error": "answer not found"}
+        rating = (await session.execute(select(Rating).where(Rating.answer_id == answer.id))).scalar()
+        return {
+            "answer": answer.text,
+            "answer_id": answer.id,
+            "rating": {
+                "value": rating.value,
+                "text": rating.text
+            }
         }
 
 # rate an answer to a question using llm 

@@ -172,7 +172,7 @@ async def generate_questions(
             is_answerable_results = []
             for q in questions:
                 logging.info(f"Checking if answerable: {q}")
-                is_answerable_results.append(is_answerable(q))
+                is_answerable_results.append(is_answerable(q, fact))
             logging.info(f"Is Answerable Results {attempts}: {is_answerable_results}")
             good_questions = [q for q, is_answerable_result in zip(questions, is_answerable_results) if is_answerable_result]
             logging.info(f"Good Questions {attempts}: {good_questions}")
@@ -335,13 +335,13 @@ def generate_fact_with_context(paragraph: Paragraph):
         context = f"In an article about \'{paragraph.page_name}\', section \'{paragraph.section_name}\'"
     return context, f"{context} mentioned: \n {paragraph.text}" 
 
-def is_answerable(question):
+def is_answerable(question, fact=""):
     if not question.strip():
         logging.debug("No question seen in is_answerable: ", question.strip())
         return False
     time.sleep(randwait(WAIT))
     output = llm_safe_request(
-        f"Is the following a well-formed question? Reply 'YES' and 'NO' only: \n\n {question}",
+        f"Is the following question: \n\n {question} \n\n answerable using *only* the following fact? \n\n Fact: {fact} \n\n Reply 'YES' and 'NO' only.",
         MODEL,
         STOP,
         prompt_prefix=PROMPT_PREFIX,

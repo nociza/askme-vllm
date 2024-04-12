@@ -119,7 +119,7 @@ async def generate_questions(
     try:
         # process prompt template
         time.sleep(randwait(WAIT))
-        prompt_template = "{PROMPT_PREFIX}Generate {NUM_QUESTIONS} additional short answer (DO NOT INCLUDE CHOICES) questions about the facts mentioned in the following paragraph. The questions should be self-contained; meaning you avoid using references such as 'it', 'the game', 'the person', etc., but should directly include the name of the referenced item instead.\n\nExisting questions:\n{EXISTING_QUESTIONS}\n\nParagraph: {PARAGRAPH}\n{PROMPT_SUFFIX}"
+        prompt_template = "{PROMPT_PREFIX}Generate {NUM_QUESTIONS} additional short answer (DO NOT INCLUDE CHOICES) questions about the facts mentioned in the following paragraph. The questions should be self-contained; meaning you avoid using references such as 'it', 'the game', 'the person', etc., but should directly include the name of the referenced item instead. Remember to include relevant context in the question. \n\nExisting questions:\n{EXISTING_QUESTIONS}\n\nParagraph: {PARAGRAPH}\n{PROMPT_SUFFIX}"
         context, fact = generate_fact_with_context(paragraph)
         _, template = generate_prompts_from_template(
             prompt_template,
@@ -339,7 +339,7 @@ def is_answerable(question, fact=""):
         return False
     time.sleep(randwait(WAIT))
     if not fact:
-        prompt = f"Is the following question: \n\n {question} \n\n well-formed and answerable without additional context? \n\n Reply 'YES' and 'NO' only."
+        prompt = f"Is the following question: \n\n {question} \n\n answerable without additional context? \n\n Reply 'YES' and 'NO' only."
     else: 
         prompt = f"Is the following question: \n\n {question} \n\n answerable using *only* the following fact? \n\n Fact: {fact} \n\n Reply 'YES' and 'NO' only."
 

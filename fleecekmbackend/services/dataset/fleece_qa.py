@@ -10,7 +10,7 @@ from fleecekmbackend.db.models import Paragraph, Question, Answer, Rating
 from fleecekmbackend.db.helpers import create_author_if_not_exists
 from fleecekmbackend.core.utils.llm import llm_safe_request, randwait, generate_prompts_from_template
 
-WAIT = 0.5
+WAIT = 0.1
 MODEL = "mistralai/Mixtral-8x7B-Instruct-v0.1"
 STOP = ["[/INST]", "</s>"]
 PROMPT_PREFIX, PROMPT_SUFFIX = ["[INST]", "[/INST]"]
@@ -178,9 +178,6 @@ async def generate_questions(
             logging.info(f"Good Questions {attempts}: {good_questions}")
         if len(good_questions) < k:
             logging.error(f"Failed to get {k} questions after {max_attempts} attempts, current number of questions: {len(good_questions)}")
-            raise Exception(
-                f"Cannot get {k} questions to the correct format after {max_attempts} attempts"
-            )
 
         logging.info(f"Good Questions: {good_questions}")
 

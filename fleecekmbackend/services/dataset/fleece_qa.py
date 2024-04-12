@@ -46,7 +46,7 @@ async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[Lis
                     logging.info(f"generated_rating_id: {rating_id}")
 
             except Exception as e:
-                logging.error(f"Error processing question: {question_id.text}")
+                logging.error(f"Error processing question: {question_id}")
                 logging.error(str(e))
                 raise
         
@@ -232,7 +232,7 @@ async def generate_answer(
             prompt_template,
             {
                 "CONTEXT_PROMPT": context_prompt,
-                "QUESTION": question.text,
+                "QUESTION": question.text_cleaned,
                 "PROMPT_PREFIX": PROMPT_PREFIX,
                 "PROMPT_SUFFIX": PROMPT_SUFFIX,
             },
@@ -331,7 +331,7 @@ def generate_fact_with_context(paragraph: Paragraph):
         context = f"In an article about \'{paragraph.page_name}\', section \'{paragraph.section_name}\', subsection \'{paragraph.subsection_name}\'"
     else:
         context = f"In an article about \'{paragraph.page_name}\', section \'{paragraph.section_name}\'"
-    return context, f"{context} mentioned: \n {paragraph.text}" 
+    return context, f"{context} mentioned: \n {paragraph.text_cleaned}" 
 
 def is_answerable(question, fact=""):
     if not question.strip():

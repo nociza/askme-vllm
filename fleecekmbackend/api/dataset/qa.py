@@ -19,8 +19,8 @@ async def random_sample_r2l(n: int):
         # get one random question that's related to the paragraph
         question = (await session.execute(select(Question).where(Question.paragraph_id == paragraph[0].id))).scalar()
         return {
-            "paragraph": paragraph[0].text,
-            "paragraph_id": paragraph[0].id,
+            "paragraph": paragraph[0].text_cleaned,
+            "paragraph_id": paragraph[0].id, 
             "fact_with_context": fact_with_context,
             "question": question.text,
             "question_id": question.id

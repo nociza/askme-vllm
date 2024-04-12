@@ -232,7 +232,7 @@ async def generate_answer(
             prompt_template,
             {
                 "CONTEXT_PROMPT": context_prompt,
-                "QUESTION": question.text_cleaned,
+                "QUESTION": question.text,
                 "PROMPT_PREFIX": PROMPT_PREFIX,
                 "PROMPT_SUFFIX": PROMPT_SUFFIX,
             },

@@ -169,12 +169,13 @@ async def generate_questions(
             attempts += 1
             questions = generate_or_regenerate_questions(good_questions)
             logging.info(f"Generated Questions {attempts}: {questions}")
-            is_answerable_results = []
             for q in questions:
                 logging.info(f"Checking if answerable: {q}")
-                is_answerable_results.append(is_answerable(q, fact))
-            logging.info(f"Is Answerable Results {attempts}: {is_answerable_results}")
-            good_questions = [q for q, is_answerable_result in zip(questions, is_answerable_results) if is_answerable_result]
+                q_is_answerable_ic = is_answerable(q, fact)
+                q_is_answerable_zs = is_answerable(q)
+                logging.info(f"Answerable in IC: {q_is_answerable_ic}, Answerable in ZS: {q_is_answerable_zs}")
+                if q_is_answerable_ic and q_is_answerable_zs:
+                    good_questions.append(q)
             logging.info(f"Good Questions {attempts}: {good_questions}")
         if len(good_questions) < k:
             logging.error(f"Failed to get {k} questions after {max_attempts} attempts, current number of questions: {len(good_questions)}")
@@ -337,8 +338,13 @@ def is_answerable(question, fact=""):
         logging.debug("No question seen in is_answerable: ", question.strip())
         return False
     time.sleep(randwait(WAIT))
+    if not fact:
+        prompt = f"Is the following question: \n\n {question} \n\n well-formed and answerable without additional context? \n\n Reply 'YES' and 'NO' only."
+    else: 
+        prompt = f"Is the following question: \n\n {question} \n\n answerable using *only* the following fact? \n\n Fact: {fact} \n\n Reply 'YES' and 'NO' only."
+
     output = llm_safe_request(
-        f"Is the following question: \n\n {question} \n\n answerable using *only* the following fact? \n\n Fact: {fact} \n\n Reply 'YES' and 'NO' only.",
+        prompt,
         MODEL,
         STOP,
         prompt_prefix=PROMPT_PREFIX,

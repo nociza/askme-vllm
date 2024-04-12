@@ -31,6 +31,7 @@ class Question(Base):
     paragraph_id = Column(Integer) 
     scope = Column(String) # the scope of the question, e.g. "single-paragraph"
     context = Column(Text) # the context of the question for a fair zeroshot evaluation
+    zs_answerable = Column(Boolean) # whether the question is answerable in a zero-shot setting
     text = Column(Text)
     author_id = Column(Integer) 
     timestamp = Column(String) 

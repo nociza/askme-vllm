@@ -32,6 +32,7 @@ async def load_csv_data(file):
                 # Create the table if it doesn't exist
                 await conn.run_sync(Paragraph.__table__.create)
                 await conn.commit()  # Commit the table creation transaction
+                await conn.execute("SET SESSION sql_mode='NO_AUTO_VALUE_ON_ZERO'")
                 
             try:
                 # Insert the data into the database

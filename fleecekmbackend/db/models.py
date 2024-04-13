@@ -2,9 +2,9 @@ from sqlalchemy import Column, Integer, String, Text, Boolean, Enum
 from fleecekmbackend.db.ctl import Base
 
 
-class Paragraph(Base): # change to paragraph
+class Paragraph(Base):
     __tablename__ = "paragraph"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     page_name = Column(String(1023))
     section_name = Column(String(1023))
     subsection_name = Column(String(1023))
@@ -20,7 +20,7 @@ class Paragraph(Base): # change to paragraph
 
 class Author(Base):
     __tablename__ = "author"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     model = Column(String(1023)) # can be human
     prompt = Column(Text, nullable=True) 
     username = Column(String(1023), nullable=True)
@@ -39,7 +39,7 @@ class Question(Base):
 
 class Answer(Base):
     __tablename__ = "answer"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     question_id = Column(Integer)
     author_id = Column(Integer)
     setting = Column(Enum("zs", "ic", "human"))
@@ -48,7 +48,7 @@ class Answer(Base):
 
 class Rating(Base):
     __tablename__ = "rating"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     text = Column(Text) # rationale for the rating
     value = Column(Integer) # score from 1 to 5
     answer_id = Column(Integer)

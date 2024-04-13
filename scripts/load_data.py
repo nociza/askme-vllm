@@ -33,7 +33,9 @@ async def load_csv_data(file_path):
 
             # Load the dataset if the table doesn't exist or is empty
             df = pd.read_csv(file_path)
-            df['within_page_order'] = df.groupby('page_name').cumcount().where(pd.notnull(df), None, axis=0)
+            df['within_page_order'] = df.groupby('page_name').cumcount()
+
+            # Replace NaN values with None
             df = df.where(pd.notnull(df), None)
 
             if not table_exists:

@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 import logging
 
 logging.getLogger().addHandler(logging.StreamHandler())
-logging.getLogger().setLevel(logging.INFO)
+logging.getLogger().setLevel(logging.WARNING)
 router = APIRouter()
 
 @router.get("/random-sample-r2l")

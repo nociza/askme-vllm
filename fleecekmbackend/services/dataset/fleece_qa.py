@@ -6,7 +6,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Tuple
 from fleecekmbackend.db.ctl import async_session
-from fleecekmbackend.db.models import Paragraph, Question, Answer, Rating
+from fleecekmbackend.db.models import Paragraph, Question, Answer, Rating, Metadata
 from fleecekmbackend.db.helpers import create_author_if_not_exists
 from fleecekmbackend.core.utils.llm import llm_safe_request, randwait, generate_prompts_from_template
 
@@ -51,12 +51,20 @@ async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[Lis
                 raise
         
         async with async_session() as session:
-            largest_processed = (await session.execute(select(func.max(Paragraph.processed)))).scalar()
+            largest_processed = (await session.execute(select(Metadata.value).where(Metadata.key == "largest_processed"))).scalar()
             if largest_processed is None:
-                raise Exception("largest_processed is None")
+                largest_processed = (await session.execute(select(func.max(Paragraph.processed)))).scalar()
+                metadata = Metadata(key="largest_processed", value=largest_processed)
+                session.add(metadata)
+                await session.commit()
+
+            largest_processed = int(largest_processed)
             print("largest_processed: ", largest_processed)
             await session.execute(
                 update(Paragraph).where(Paragraph.id == paragraph_id).values(processed=largest_processed + 1)
+            )
+            await session.execute(
+                update(Metadata).where(Metadata.key == "largest_processed").values(value=largest_processed + 1)
             )
             await session.commit()
             logging.info(f"Processed paragraph: {paragraph_id}")

@@ -28,7 +28,7 @@ class Author(Base):
 class Question(Base):
     __tablename__ = "question"
     id = Column(Integer, primary_key=True, index=True)
-    paragraph_id = Column(Integer) 
+    paragraph_id = Column(Integer, index=True) 
     scope = Column(String(1023)) # the scope of the question, e.g. "single-paragraph"
     context = Column(Text) # the context of the question for a fair zeroshot evaluation
     text = Column(Text)
@@ -54,3 +54,9 @@ class Rating(Base):
     answer_id = Column(Integer)
     author_id = Column(Integer)
     timestamp = Column(String(255))
+
+class Metadata(Base):
+    __tablename__ = "metadata"
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    key = Column(String(1023))
+    value = Column(Text)

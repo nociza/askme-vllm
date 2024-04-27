@@ -66,7 +66,7 @@ async def get_random_samples_raw_as_df(n: int, db: AsyncSession):
 
 async def get_random_unprocessed_paragraph(db: AsyncSession):
     try:
-        query = select(Paragraph).filter(Paragraph.processed == -1).order_by(func.random()).limit(1)
+        query = select(Paragraph).filter(Paragraph.processed == -1).limit(1)
         result = await db.execute(query)
         paragraph = result.scalar()
         if paragraph is None:

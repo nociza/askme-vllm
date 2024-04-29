@@ -1,6 +1,7 @@
 import re
 import time
 import logging
+import asyncio
 from datetime import datetime
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -74,6 +75,70 @@ async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[Lis
         logging.error(str(e))
         raise
     return generated_question_ids, generated_answer_ids, generated_rating_ids
+
+async def process_paragraph_with_retry(db: AsyncSession, paragraph: Paragraph) -> Tuple[List[Question], List[Answer], List[Rating]]:
+    max_retries = 3
+    retry_delay = 5
+    for attempt in range(max_retries):
+        try:
+            generated_question_ids = []
+            generated_answer_ids = []
+            generated_rating_ids = []
+            
+            paragraph_id = paragraph.id
+            logging.info(f"Processing paragraph: {paragraph_id}")
+            
+            question_ids = await generate_questions(db, paragraph)
+            logging.info(f"generated_questions: {question_ids}")
+            generated_question_ids.extend(question_ids)
+            
+            for question_id in question_ids:
+                try:
+                    for setting in ["zs", "ic"]:
+                        # Generate answers
+                        answer_id = await generate_answer(db, question_id, setting)
+                        generated_answer_ids.append(answer_id)
+                        logging.info(f"generated_answer_id: {answer_id}")
+                        
+                        # Generate answer ratings
+                        rating_id = await generate_answer_rating(db, question_id, answer_id)
+                        generated_rating_ids.append(rating_id)
+                        logging.info(f"generated_rating_id: {rating_id}")
+                except Exception as e:
+                    logging.error(f"Error processing question: {question_id}")
+                    logging.error(str(e))
+                    raise
+            
+            largest_processed = (await db.execute(select(Metadata.value).where(Metadata.key == "largest_processed"))).scalar()
+            if largest_processed is None:
+                largest_processed = (await db.execute(select(func.max(Paragraph.processed)))).scalar()
+            metadata = Metadata(key="largest_processed", value=largest_processed)
+            db.add(metadata)
+            await db.flush()
+            await db.refresh(metadata, ["id"])
+            largest_processed = int(largest_processed)
+            logging.info("largest_processed: ", largest_processed)
+            
+            await db.execute(
+                update(Paragraph).where(Paragraph.id == paragraph_id).values(processed=largest_processed + 1)
+            )
+            await db.execute(
+                update(Metadata).where(Metadata.key == "largest_processed").values(value=largest_processed + 1)
+            )
+            await db.commit()
+            logging.info(f"Processed paragraph: {paragraph_id}")
+            
+            return generated_question_ids, generated_answer_ids, generated_rating_ids
+        
+        except Exception as e:
+            await db.rollback()
+            logging.error(str(e))
+            if attempt < max_retries - 1:
+                logging.info(f"Retrying in {retry_delay} seconds...")
+                await asyncio.sleep(retry_delay)
+            else:
+                logging.error(f"Max retries reached for paragraph: {paragraph_id}. Skipping.")
+                raise
 
 ############################ Generation Functions ############################
 # Generate questions for a paragraph

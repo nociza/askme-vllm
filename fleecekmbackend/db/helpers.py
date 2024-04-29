@@ -100,7 +100,8 @@ async def create_author_if_not_exists(prompt: str, model: str):
             db.add(author)
             await db.commit()
             await db.refresh(author, ["id"])
-        return author
+        author_id = author.id
+        return author_id
         
         
 

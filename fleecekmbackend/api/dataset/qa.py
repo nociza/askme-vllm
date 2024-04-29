@@ -5,10 +5,20 @@ from fleecekmbackend.db.models import Paragraph, Question, Answer, Author, Ratin
 from fleecekmbackend.services.dataset.fleece_qa import generate_answer_rating, generate_fact_with_context
 from sqlalchemy import func, select
 import logging
+import sys
 import random
 
-logging.getLogger().addHandler(logging.StreamHandler())
-logging.getLogger().setLevel(logging.WARNING)
+
+root = logging.getLogger()
+root.setLevel(logging.DEBUG)
+
+ch = logging.StreamHandler(sys.stdout)
+ch.setLevel(logging.DEBUG)
+FORMAT = "[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
+formatter = logging.Formatter(FORMAT)
+ch.setFormatter(formatter)
+root.addHandler(ch)
+
 router = APIRouter()
 
 @router.get("/random-sample-r2l")
@@ -92,7 +102,7 @@ async def rate_answer(user_name: str, answer: str, question_id: str, db: Session
         print(rating_id)
         rating = (await session.execute(select(Rating).where(Rating.id == rating_id))).scalar()
         return {
-            "id": rating.id,
+            "id": rating_id,
             "value": rating.value,
             "text": rating.text
         }
@@ -148,4 +158,4 @@ async def get_progress(db: Session = Depends(get_db)):
             session.add(metadata)
             await session.commit()
 
-        return {"progress": largest_processed, "total": total, "percentage": largest_processed/total*100}
+        return {"progress": int(largest_processed), "total": int(total), "percentage": int(largest_processed) / int(total) * 100}

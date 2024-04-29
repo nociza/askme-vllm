@@ -43,7 +43,7 @@ async def process_all_pages():
                 # Wait for a short duration before retrying
                 await asyncio.sleep(5)
 
-async def process_all_pages_parallel():
+async def process_all_pages_parallel(batch_size=5):
     while True:
         async with async_session() as db:
             # Check if there are any unprocessed paragraphs
@@ -56,7 +56,7 @@ async def process_all_pages_parallel():
 
             try:
                 # Get a batch of unprocessed paragraphs
-                paragraphs = await get_next_unprocessed_paragraphs(db, 10)
+                paragraphs = await get_next_unprocessed_paragraphs(db, batch_size)
                 if not paragraphs:
                     logging.info("No unprocessed paragraphs found. Stopping the process.")
                     break
@@ -78,7 +78,7 @@ async def process_all_pages_parallel():
 
 async def start_background_process():
     try:
-        await process_all_pages_parallel()
+        await process_all_pages_parallel(1)
     except Exception as e:
         logging.error("Error in background process:")
         logging.error(str(e))

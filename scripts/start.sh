@@ -1,1 +1,1 @@
-poetry run uvicorn fleecekmbackend.main:app --host 0.0.0.0 --port 12345
+poetry run uvicorn fleecekmbackend.main:app --host 0.0.0.0 --port 12346

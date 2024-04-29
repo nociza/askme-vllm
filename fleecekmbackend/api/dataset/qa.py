@@ -10,10 +10,10 @@ import random
 
 
 root = logging.getLogger()
-root.setLevel(logging.DEBUG)
+root.setLevel(logging.ERROR)
 
 ch = logging.StreamHandler(sys.stdout)
-ch.setLevel(logging.DEBUG)
+ch.setLevel(logging.ERROR)
 FORMAT = "[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
 formatter = logging.Formatter(FORMAT)
 ch.setFormatter(formatter)
@@ -71,7 +71,7 @@ async def answer_generated(question_id: str):
 
 # rate an answer to a question using llm 
 @router.post("/rate-answer")
-async def rate_answer(user_name: str, answer: str, question_id: str, db: Session = Depends(get_db)):
+async def rate_answer(user_name: str, answer: str, question_id: str):
     async with async_session() as session:
         existing_author = (await session.execute(select(Author).where(Author.username == user_name))).scalar()
         if existing_author is None:
@@ -94,12 +94,14 @@ async def rate_answer(user_name: str, answer: str, question_id: str, db: Session
         
         answer = Answer(question_id=question_id, author_id=author_id, setting="human", text=answer)
         session.add(answer)
-        await session.commit()
+        await session.flush()
         await session.refresh(answer, ["id"])
         answer_id = answer.id
+        print("Answer ID:", answer_id)
 
-        rating_id = await generate_answer_rating(db, question_id, answer_id)
-        print(rating_id)
+        rating_id = await generate_answer_rating(session, question_id, answer_id)
+        print("Rating ID:", rating_id)
+        await session.commit()
         rating = (await session.execute(select(Rating).where(Rating.id == rating_id))).scalar()
         return {
             "id": rating_id,

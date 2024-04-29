@@ -16,7 +16,13 @@ uvicorn = "^0.28.0"
 requests = "^2.31.0"
 together = "^0.2.11"
 python-dotenv = "^1.0.1"
+aiomysql = "^0.2.0"
+cryptography = "^42.0.5"
+tqdm = "^4.66.2"
 
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.29.4"
 
 [build-system]
 requires = ["poetry-core"]

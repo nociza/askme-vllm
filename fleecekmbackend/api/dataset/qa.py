@@ -1,26 +1,50 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from fleecekmbackend.db.ctl import get_db, async_session
-from fleecekmbackend.db.models import Paragraph, Question, Answer, Author, Rating
+from fleecekmbackend.db.models import Paragraph, Question, Answer, Author, Rating, Metadata
 from fleecekmbackend.services.dataset.fleece_qa import generate_answer_rating, generate_fact_with_context
 from sqlalchemy import func, select
 import logging
+import sys
+import random
 
-logging.getLogger().addHandler(logging.StreamHandler())
-logging.getLogger().setLevel(logging.INFO)
+
+root = logging.getLogger()
+root.setLevel(logging.ERROR)
+
+ch = logging.StreamHandler(sys.stdout)
+ch.setLevel(logging.ERROR)
+FORMAT = "[%(filename)s:%(lineno)s - %(funcName)20s() ] %(message)s"
+formatter = logging.Formatter(FORMAT)
+ch.setFormatter(formatter)
+root.addHandler(ch)
+
 router = APIRouter()
 
 @router.get("/random-sample-r2l")
 async def random_sample_r2l(n: int):
     async with async_session() as session:
-        query = select(Paragraph).where(Paragraph.processed != -1).order_by(func.random()).limit(n)
-        paragraph = (await session.execute(query)).scalars().all()
-        _, fact_with_context = generate_fact_with_context(paragraph[0])
-        # get one random question that's related to the paragraph
-        question = (await session.execute(select(Question).where(Question.paragraph_id == paragraph[0].id))).scalar()
+        question = None
+        while not question:
+            max_offset = (await session.execute(select(Metadata.value).where(Metadata.key == "largest_processed"))).scalar()
+            if max_offset is None:
+                max_offset = (await session.execute(select(func.max(Paragraph.processed)))).scalar()
+                metadata = Metadata(key="largest_processed", value=max_offset)
+                session.add(metadata)
+                await session.commit()
+
+            offset = random.randint(0, int(max_offset))
+            # get a random paragraph that has been processed
+            paragraph = (await session.execute(select(Paragraph).where(Paragraph.processed != -1).offset(offset).limit(1))).scalar()
+            if paragraph is None:
+                continue
+            _, fact_with_context = generate_fact_with_context(paragraph)
+            # get one random question that's related to the paragraph
+            question = (await session.execute(select(Question).where(Question.paragraph_id == paragraph.id))).scalar()
+            
         return {
-            "paragraph": paragraph[0].text_cleaned,
-            "paragraph_id": paragraph[0].id, 
+            "paragraph": paragraph.text_cleaned,
+            "paragraph_id": paragraph.id, 
             "fact_with_context": fact_with_context,
             "question": question.text,
             "question_id": question.id
@@ -47,7 +71,7 @@ async def answer_generated(question_id: str):
 
 # rate an answer to a question using llm 
 @router.post("/rate-answer")
-async def rate_answer(user_name: str, answer: str, question_id: str, db: Session = Depends(get_db)):
+async def rate_answer(user_name: str, answer: str, question_id: str):
     async with async_session() as session:
         existing_author = (await session.execute(select(Author).where(Author.username == user_name))).scalar()
         if existing_author is None:
@@ -70,15 +94,15 @@ async def rate_answer(user_name: str, answer: str, question_id: str, db: Session
         
         answer = Answer(question_id=question_id, author_id=author_id, setting="human", text=answer)
         session.add(answer)
-        await session.commit()
+        await session.flush()
         await session.refresh(answer, ["id"])
         answer_id = answer.id
 
-        rating_id = await generate_answer_rating(db, question_id, answer_id)
-        print(rating_id)
+        rating_id = await generate_answer_rating(session, question_id, answer_id)
+        await session.commit()
         rating = (await session.execute(select(Rating).where(Rating.id == rating_id))).scalar()
         return {
-            "id": rating.id,
+            "id": rating_id,
             "value": rating.value,
             "text": rating.text
         }
@@ -120,8 +144,18 @@ async def user_rate_question(user_name: str, question_id: str, value: int, text:
 @router.get("/progress") # get the progress of the qa generation
 async def get_progress(db: Session = Depends(get_db)):
     async with async_session() as session:
-        largest_processed = (await session.execute(select(func.max(Paragraph.processed)))).scalar()
+        largest_processed = (await session.execute(select(Metadata.value).where(Metadata.key == "largest_processed"))).scalar()
         if largest_processed is None:
-            largest_processed = 0
-        total = (await session.execute(select(func.count(Paragraph.id)))).scalar()
-        return {"progress": largest_processed, "total": total, "percentage": largest_processed/total*100}
+            largest_processed = (await session.execute(select(func.max(Paragraph.processed))).scalar())
+            metadata = Metadata(key="largest_processed", value=largest_processed)
+            session.add(metadata)
+            await session.commit()
+
+        total = (await session.execute(select(Metadata.value).where(Metadata.key == "num_paragraphs"))).scalar()
+        if total is None:
+            total = (await session.execute(select(func.count(Paragraph.id)))).scalar()
+            metadata = Metadata(key="num_paragraphs", value=total)
+            session.add(metadata)
+            await session.commit()
+
+        return {"progress": int(largest_processed), "total": int(total), "percentage": int(largest_processed) / int(total) * 100}

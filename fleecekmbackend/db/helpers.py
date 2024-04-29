@@ -1,9 +1,10 @@
 from fleecekmbackend.db.ctl import async_session, engine
 from fleecekmbackend.db.models import Paragraph, Author
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 import pandas as pd
 import logging
+import tqdm
 
 logging.getLogger().addHandler(logging.StreamHandler())
 
@@ -11,55 +12,43 @@ async def load_csv_data(file):
     async with async_session() as db:
         try:
             # Check if the table exists and has data
-            conn = await db.connection()
-            has_table = await conn.run_sync(
-                lambda conn: conn.dialect.has_table(conn, Paragraph.__tablename__)
-            )
-            
-            if has_table:
-                # Check if the table has any data
-                result = await conn.execute(select(func.count()).select_from(Paragraph))
-                count = result.scalar()
-                if count > 0:
-                    print(f"Dataset is already loaded with {count} entries. Skipping loading process.")
-                    return
-            
+            async with engine.connect() as conn:
+                table_exists = await conn.run_sync(
+                    lambda sync_conn: sync_conn.dialect.has_table(sync_conn, Paragraph.__tablename__)
+                )
+                if table_exists:
+                    result = await conn.execute(select(func.count()).select_from(Paragraph.__table__))
+                    count = result.scalar()
+                    if count > 0:
+                        logging.info(f"Dataset is already loaded with {count} entries. Skipping loading process.")
+                        return
+
             # Load the dataset if the table doesn't exist or is empty
             df = pd.read_csv(file)
             df['within_page_order'] = df.groupby('page_name').cumcount()
-            
-            if not has_table:
-                # Create the table if it doesn't exist
-                await conn.run_sync(Paragraph.__table__.create)
-                await conn.commit()  # Commit the table creation transaction
-                
-            try:
-                # Insert the data into the database
-                await conn.run_sync(
-                    lambda conn: df.to_sql(
-                        name=Paragraph.__tablename__,
-                        con=conn,
-                        if_exists="append",
-                        index=False,
-                    )
-                )
+            df = df.where(pd.notnull(df), None)
 
-                # make all the paragraphs unprocessed
+            if not table_exists:
+                async with engine.begin() as conn:
+                    await conn.run_sync(Paragraph.__table__.create)
+
+            # Insert the data into the database
+            async with engine.begin() as conn:
+                await conn.execute(text("SET SESSION sql_mode='NO_AUTO_VALUE_ON_ZERO'"))
+
+                for _, row in tqdm(df.iterrows(), total=len(df), desc="Inserting data"):
+                    await conn.execute(Paragraph.__table__.insert().values(row.to_dict()))
+
+                # Set processed to -1 for all paragraphs
                 await conn.execute(Paragraph.__table__.update().values(processed=-1))
-                
-                # Commit the data insertion transaction
-                await conn.commit()
-                
-            except Exception as e:
-                # Rollback the data insertion transaction if an error occurs
-                await conn.rollback()
-                raise e
-            
+
         except Exception as e:
-            logging.error(f"Error loading CSV data helper: {str(e)}")
-            
+            logging.error(f"Error loading CSV data: {str(e)}")
+            # Rollback the transaction if an error occurs
+            await conn.rollback()
+
         finally:
-            logging.info("Data loaded successfully")
+            logging.info("Data loading completed.")
 
 async def get_random_samples_raw(n: int, db: AsyncSession):
     query = select(Paragraph).order_by(func.random()).limit(n)
@@ -77,7 +66,7 @@ async def get_random_samples_raw_as_df(n: int, db: AsyncSession):
 
 async def get_random_unprocessed_paragraph(db: AsyncSession):
     try:
-        query = select(Paragraph).filter(Paragraph.processed == -1).order_by(func.random()).limit(1)
+        query = select(Paragraph).filter(Paragraph.processed == -1).limit(1)
         result = await db.execute(query)
         paragraph = result.scalar()
         if paragraph is None:
@@ -111,7 +100,8 @@ async def create_author_if_not_exists(prompt: str, model: str):
             db.add(author)
             await db.commit()
             await db.refresh(author, ["id"])
-        return author
+        author_id = author.id
+        return author_id
         
         
 

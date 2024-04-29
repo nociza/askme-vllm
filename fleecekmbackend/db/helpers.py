@@ -75,6 +75,16 @@ async def get_random_unprocessed_paragraph(db: AsyncSession):
     except Exception as e:
         logging.error(f"Error retrieving random unprocessed paragraph: {str(e)}")
         return -1
+    
+async def get_next_unprocessed_paragraphs(db: AsyncSession, n: int):
+    try:
+        query = select(Paragraph).filter(Paragraph.processed == -1).limit(n)
+        result = await db.execute(query)
+        paragraphs = result.scalars().all()
+        return paragraphs
+    except Exception as e:
+        logging.error(f"Error retrieving next unprocessed paragraphs: {str(e)}")
+        return []
 
 async def get_page_raw(db: AsyncSession, index: int = -1):
     if index == -1: # get all the paragraphs with the same (randomly selected) page_name

@@ -59,7 +59,7 @@ async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[Lis
             await db.refresh(metadata, ["id"])
 
         largest_processed = int(largest_processed)
-        print("largest_processed: ", largest_processed)
+        logging.info("largest_processed: ", largest_processed)
         await db.execute(
             update(Paragraph).where(Paragraph.id == paragraph_id).values(processed=largest_processed + 1)
         )
@@ -261,7 +261,7 @@ async def generate_answer_rating(
 
         author_id = await create_author_if_not_exists(template, MODEL)
 
-        print(f"Author ID: {author_id}")
+        logging.debug(f"Author ID: {author_id}")
 
         # main loop
         attempts = 0
@@ -275,7 +275,7 @@ async def generate_answer_rating(
                 score = int(re.search(r"[0-5]", rating_raw).group())
                 rationale = "".join(rating_raw.split("Rationale:", re.I)[1:]).strip()
 
-                print(f"Score: {score}, Rationale: {rationale}")
+                logging.debug(f"Score: {score}, Rationale: {rationale}")
 
                 rating = Rating(
                     text=rationale,
@@ -288,7 +288,7 @@ async def generate_answer_rating(
                 db.add(rating)
                 await db.flush()
                 await db.refresh(rating, ["id"])
-                print(f"Generated rating: {rating.value} for answer: {answer.text} with rationale: {rating.text}, id: {rating.id}")
+                logging.debug(f"Generated rating: {rating.value} for answer: {answer.text} with rationale: {rating.text}, id: {rating.id}")
                 rating_id = rating.id
                 return rating_id
 

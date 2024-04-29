@@ -27,8 +27,8 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logging.error(f"Error loading CSV data: {str(e)}")
 
-    # async with background_process_lock:
-    #     asyncio.create_task(start_background_process())
+    async with background_process_lock:
+        asyncio.create_task(start_background_process())
 
     yield
 

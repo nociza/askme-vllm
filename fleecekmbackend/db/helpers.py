@@ -1,5 +1,6 @@
+import random
 from fleecekmbackend.db.ctl import async_session, engine
-from fleecekmbackend.db.models import Paragraph, Author
+from fleecekmbackend.db.models import Metadata, Paragraph, Author
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 import pandas as pd
@@ -64,21 +65,33 @@ async def get_random_samples_raw_as_df(n: int, db: AsyncSession):
     df = df.drop(columns=['_sa_instance_state'])
     return df
 
-async def get_random_unprocessed_paragraph(db: AsyncSession):
+async def get_random_unprocessed_paragraphs(db: AsyncSession, n: int = 1):
     try:
-        query = select(Paragraph).filter(Paragraph.processed == -1).limit(1)
-        result = await db.execute(query)
-        paragraph = result.scalar()
-        if paragraph is None:
-            return -1
+        paragraph = None
+        while paragraph == -1:
+            max_processed = (await db.execute(select(Metadata.value).where(Metadata.key == "largest_processed"))).scalar()
+            if max_processed is None:
+                max_processed = (await db.execute(select(func.max(Paragraph.processed)))).scalar()
+                metadata = Metadata(key="largest_processed", value=max_processed)
+                db.add(metadata)
+                await db.commit()
+            total_paragraphs = (await db.execute(select(Metadata.value).where(Metadata.key == "num_paragraphs"))).scalar()
+            if total_paragraphs is None:
+                total_paragraphs = (await db.execute(select(func.count(Paragraph.id)))).scalar()
+                metadata = Metadata(key="num_paragraphs", value=total_paragraphs)
+                db.add(metadata)
+                await db.commit()
+            offset = random.randint(0, int(total_paragraphs - max_processed))
+            paragraph = (await db.execute(select(Paragraph).where(Paragraph.processed == -1).offset(offset).limit(1))).scalar()
         return paragraph
     except Exception as e:
         logging.error(f"Error retrieving random unprocessed paragraph: {str(e)}")
         return -1
     
 async def get_next_unprocessed_paragraphs(db: AsyncSession, n: int):
+
     try:
-        query = select(Paragraph).filter(Paragraph.processed == -1).limit(n)
+        query = select(Paragraph).filter(Paragraph.processed == -1).order_by().limit(n)
         result = await db.execute(query)
         paragraphs = result.scalars().all()
         return paragraphs

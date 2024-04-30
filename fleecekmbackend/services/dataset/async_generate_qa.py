@@ -4,7 +4,7 @@ from typing import List, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import distinct, func, select, delete
 from fleecekmbackend.db.ctl import async_session, engine
-from fleecekmbackend.db.helpers import get_random_unprocessed_paragraph, get_next_unprocessed_paragraphs
+from fleecekmbackend.db.helpers import get_random_unprocessed_paragraphs, get_next_unprocessed_paragraphs
 from fleecekmbackend.services.dataset.fleece_qa import process_paragraph, process_paragraph_with_retry
 from fleecekmbackend.db.models import Paragraph, Question, Answer, Rating, Author
 
@@ -21,7 +21,7 @@ async def process_all_pages():
                 break
 
             try:
-                current_paragraph = await get_random_unprocessed_paragraph(db)
+                current_paragraph = await get_random_unprocessed_paragraphs(db)
                 print(f"current_paragraph: {current_paragraph}")
 
                 while current_paragraph != -1:
@@ -31,11 +31,11 @@ async def process_all_pages():
                         logging.info(f"generated_questions: {generated_questions}")
                         logging.info(f"generated_answers: {generated_answers}")
                         logging.info(f"generated_ratings: {generated_ratings}")
-                        current_paragraph = await get_random_unprocessed_paragraph(db)
+                        current_paragraph = await get_random_unprocessed_paragraphs(db)
                     except Exception as e:
                         logging.error(f"Error processing page {current_paragraph.page_name}")
                         logging.error(str(e))
-                        current_paragraph = await get_random_unprocessed_paragraph(db)
+                        current_paragraph = await get_random_unprocessed_paragraphs(db)
 
                 logging.info("All pages processed successfully.")
             except Exception as e:
@@ -56,7 +56,7 @@ async def process_all_pages_parallel(batch_size=5):
 
             try:
                 # Get a batch of unprocessed paragraphs
-                paragraphs = await get_next_unprocessed_paragraphs(db, batch_size)
+                paragraphs = await get_random_unprocessed_paragraphs(db, batch_size)
                 if not paragraphs:
                     logging.info("No unprocessed paragraphs found. Stopping the process.")
                     break

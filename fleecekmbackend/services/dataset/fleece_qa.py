@@ -12,9 +12,9 @@ from fleecekmbackend.db.helpers import create_author_if_not_exists
 from fleecekmbackend.core.utils.llm import llm_safe_request, randwait, generate_prompts_from_template
 
 WAIT = 0.1
-MODEL = "mistralai/Mixtral-8x7B-Instruct-v0.1"
+MODEL = "meta-llama/Meta-Llama-3-70B-Instruct"
 STOP = ["[/INST]", "</s>"]
-PROMPT_PREFIX, PROMPT_SUFFIX = ["[INST]", "[/INST]"]
+PROMPT_PREFIX, PROMPT_SUFFIX = ["<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n", "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"]
 
 NUMQUESTIONS = 3
 MAX_ATTEMPTS = 5

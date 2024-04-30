@@ -8,7 +8,7 @@ from dotenv import dotenv_values
 
 together.api_key = dotenv_values()["TOGETHER_API_KEY"]
 
-WAIT = 0.1
+WAIT = 0
 MAX_RETRIES = 10
 MAX_TOKEN = 512
 TEMPERATURE = 0.7

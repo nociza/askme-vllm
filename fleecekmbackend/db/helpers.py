@@ -67,23 +67,27 @@ async def get_random_samples_raw_as_df(n: int, db: AsyncSession):
 
 async def get_random_unprocessed_paragraphs(db: AsyncSession, n: int = 1):
     try:
-        paragraph = None
-        while paragraph == -1:
+        paragraphs = []
+        while not paragraphs:
             max_processed = (await db.execute(select(Metadata.value).where(Metadata.key == "largest_processed"))).scalar()
             if max_processed is None:
                 max_processed = (await db.execute(select(func.max(Paragraph.processed)))).scalar()
                 metadata = Metadata(key="largest_processed", value=max_processed)
                 db.add(metadata)
-                await db.commit()
+                await db.flush()
             total_paragraphs = (await db.execute(select(Metadata.value).where(Metadata.key == "num_paragraphs"))).scalar()
             if total_paragraphs is None:
                 total_paragraphs = (await db.execute(select(func.count(Paragraph.id)))).scalar()
                 metadata = Metadata(key="num_paragraphs", value=total_paragraphs)
                 db.add(metadata)
-                await db.commit()
-            offset = random.randint(0, int(total_paragraphs - max_processed))
-            paragraph = (await db.execute(select(Paragraph).where(Paragraph.processed == -1).offset(offset).limit(1))).scalar()
-        return paragraph
+                await db.flush()
+            offset = random.randint(0, int(total_paragraphs) - int(max_processed))
+            paragraphs = (await db.execute(select(Paragraph).where(Paragraph.processed == -1).offset(offset).limit(n))).scalar()
+        if not paragraphs:
+            raise Exception("No unprocessed paragraphs found")
+        elif isinstance(paragraphs, Paragraph):
+            return [paragraphs]
+        return paragraphs
     except Exception as e:
         logging.error(f"Error retrieving random unprocessed paragraph: {str(e)}")
         return -1

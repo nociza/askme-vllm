@@ -159,3 +159,15 @@ async def get_progress(db: Session = Depends(get_db)):
             await session.commit()
 
         return {"progress": int(largest_processed), "total": int(total), "percentage": int(largest_processed) / int(total) * 100}
+
+@router.get("/progress-accurate")
+async def get_progress_accurate(db: Session = Depends(get_db)):
+    async with async_session() as session:
+        largest_processed = (await session.execute(select(func.max(Paragraph.processed)))).scalar()
+        total = (await session.execute(select(func.count(Paragraph.id)))).scalar()
+        
+        metadata = Metadata(key="largest_processed", value=largest_processed)
+        session.add(metadata)
+        await session.commit()
+
+        return {"progress": int(largest_processed), "total": int(total), "percentage": int(largest_processed) / int(total) * 100}

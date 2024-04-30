@@ -13,7 +13,7 @@ async def process_all_pages():
         async with async_session() as db:
             # Check if there are any unprocessed paragraphs
             unprocessed_paragraph_exists = await db.scalar(
-                select(func.count(Paragraph.id)).where(Paragraph.processed == -1)
+                select(func.max(Paragraph.id)).where(Paragraph.processed == -1)
             )
 
             if not unprocessed_paragraph_exists:
@@ -48,7 +48,7 @@ async def process_all_pages_parallel(batch_size=5):
         async with async_session() as db:
             # Check if there are any unprocessed paragraphs
             unprocessed_paragraph_exists = await db.scalar(
-                select(func.count(Paragraph.id)).where(Paragraph.processed == -1)
+                select(func.max(Paragraph.id)).where(Paragraph.processed == -1)
             )
             if not unprocessed_paragraph_exists:
                 logging.info("All paragraphs have been processed. Stopping the process.")

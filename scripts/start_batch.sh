@@ -11,7 +11,7 @@ mkdir -p $SOCKET_DIR
 mkdir -p $LOGS_DIR
 
 # Number of instances
-NUM_INSTANCES=30
+NUM_INSTANCES=16
 
 # Start multiple instances of the app with unique socket files
 for ((i=1; i<=NUM_INSTANCES; i++))

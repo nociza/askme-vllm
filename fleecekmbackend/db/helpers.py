@@ -18,7 +18,7 @@ async def load_csv_data(file):
                     lambda sync_conn: sync_conn.dialect.has_table(sync_conn, Paragraph.__tablename__)
                 )
                 if table_exists:
-                    result = await conn.execute(select(func.count()).select_from(Paragraph.__table__))
+                    result = await conn.execute(select(func.max(Paragraph.id)).select_from(Paragraph.__table__))
                     count = result.scalar()
                     if count > 0:
                         logging.info(f"Dataset is already loaded with {count} entries. Skipping loading process.")

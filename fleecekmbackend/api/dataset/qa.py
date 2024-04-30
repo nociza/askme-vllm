@@ -153,7 +153,7 @@ async def get_progress(db: Session = Depends(get_db)):
 
         total = (await session.execute(select(Metadata.value).where(Metadata.key == "num_paragraphs"))).scalar()
         if total is None:
-            total = (await session.execute(select(func.count(Paragraph.id)))).scalar()
+            total = (await session.execute(select(func.max(Paragraph.id)))).scalar()
             metadata = Metadata(key="num_paragraphs", value=total)
             session.add(metadata)
             await session.commit()
@@ -164,7 +164,7 @@ async def get_progress(db: Session = Depends(get_db)):
 async def get_progress_accurate(db: Session = Depends(get_db)):
     async with async_session() as session:
         largest_processed = (await session.execute(select(func.max(Paragraph.processed)))).scalar()
-        total = (await session.execute(select(func.count(Paragraph.id)))).scalar()
+        total = (await session.execute(select(func.max(Paragraph.id)))).scalar()
         
         metadata = Metadata(key="largest_processed", value=largest_processed)
         session.add(metadata)

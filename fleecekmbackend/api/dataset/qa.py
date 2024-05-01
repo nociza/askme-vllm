@@ -49,6 +49,21 @@ async def random_sample_r2l(n: int):
             "question": question.text,
             "question_id": question.id
         }
+    
+@router.get("/sample-by-id")
+async def sample_by_id(paragraph_id: int):
+    async with async_session() as session:
+        paragraph = (await session.execute(select(Paragraph).where(Paragraph.id == paragraph_id))).scalar()
+        if paragraph is None:
+            return {"error": "paragraph not found"}
+        _, fact_with_context = generate_fact_with_context(paragraph)
+        question = (await session.execute(select(Question).where(Question.paragraph_id == paragraph_id))).scalar()
+        return {
+            "paragraph": paragraph.text_cleaned,
+            "fact_with_context": fact_with_context,
+            "question": question.text,
+            "question_id": question.id
+        }
 
 @router.get("/answer-generated")
 async def answer_generated(question_id: str):

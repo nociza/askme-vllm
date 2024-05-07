@@ -7,20 +7,37 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Tuple
 from fleecekmbackend.db.ctl import async_session
-from fleecekmbackend.db.models import Paragraph, Question, Answer, Rating, Metadata, RejectedQuestion
+from fleecekmbackend.db.models import (
+    Paragraph,
+    Question,
+    Answer,
+    Rating,
+    Metadata,
+    RejectedQuestion,
+)
 from fleecekmbackend.db.helpers import create_author_if_not_exists
-from fleecekmbackend.core.utils.llm import llm_safe_request, randwait, generate_prompts_from_template
+from fleecekmbackend.core.utils.llm import (
+    llm_safe_request,
+    randwait,
+    generate_prompts_from_template,
+)
 
 WAIT = 0.1
 MODEL = "meta-llama/Meta-Llama-3-70B-Instruct"
 STOP = ["[/INST]", "</s>"]
-PROMPT_PREFIX, PROMPT_SUFFIX = ["<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n", "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"]
+PROMPT_PREFIX, PROMPT_SUFFIX = [
+    "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n",
+    "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
+]
 
 NUMQUESTIONS = 4
 MAX_ATTEMPTS = 5
 
+
 ############################ Main Functions ############################
-async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[List[Question], List[Answer], List[Rating]]:
+async def process_paragraph(
+    db: AsyncSession, paragraph: Paragraph
+) -> Tuple[List[Question], List[Answer], List[Rating]]:
     generated_question_ids = []
     generated_answer_ids = []
     generated_rating_ids = []
@@ -50,10 +67,16 @@ async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[Lis
                 logging.error(f"Error processing question: {question_id}")
                 logging.error(str(e))
                 raise
-        
-        largest_processed = (await db.execute(select(Metadata.value).where(Metadata.key == "largest_processed"))).scalar()
+
+        largest_processed = (
+            await db.execute(
+                select(Metadata.value).where(Metadata.key == "largest_processed")
+            )
+        ).scalar()
         if largest_processed is None:
-            largest_processed = (await db.execute(select(func.max(Paragraph.processed)))).scalar()
+            largest_processed = (
+                await db.execute(select(func.max(Paragraph.processed)))
+            ).scalar()
             metadata = Metadata(key="largest_processed", value=largest_processed)
             db.add(metadata)
             await db.flush()
@@ -62,10 +85,14 @@ async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[Lis
         largest_processed = int(largest_processed)
         logging.info("largest_processed: ", largest_processed)
         await db.execute(
-            update(Paragraph).where(Paragraph.id == paragraph_id).values(processed=largest_processed + 1)
+            update(Paragraph)
+            .where(Paragraph.id == paragraph_id)
+            .values(processed=largest_processed + 1)
         )
         await db.execute(
-            update(Metadata).where(Metadata.key == "largest_processed").values(value=largest_processed + 1)
+            update(Metadata)
+            .where(Metadata.key == "largest_processed")
+            .values(value=largest_processed + 1)
         )
         await db.commit()
         logging.info(f"Processed paragraph: {paragraph_id}")
@@ -76,7 +103,10 @@ async def process_paragraph(db: AsyncSession, paragraph: Paragraph) -> Tuple[Lis
         raise
     return generated_question_ids, generated_answer_ids, generated_rating_ids
 
-async def process_paragraph_with_retry(db: AsyncSession, paragraph: Paragraph) -> Tuple[List[Question], List[Answer], List[Rating]]:
+
+async def process_paragraph_with_retry(
+    db: AsyncSession, paragraph: Paragraph
+) -> Tuple[List[Question], List[Answer], List[Rating]]:
     max_retries = 3
     retry_delay = 5
     for attempt in range(max_retries):
@@ -84,14 +114,14 @@ async def process_paragraph_with_retry(db: AsyncSession, paragraph: Paragraph) -
             generated_question_ids = []
             generated_answer_ids = []
             generated_rating_ids = []
-            
+
             paragraph_id = paragraph.id
             logging.info(f"Processing paragraph: {paragraph_id}")
-            
+
             question_ids = await generate_questions_single_turn(db, paragraph)
             logging.info(f"generated_questions: {question_ids}")
             generated_question_ids.extend(question_ids)
-            
+
             for question_id in question_ids:
                 try:
                     for setting in ["zs", "ic"]:
@@ -99,37 +129,49 @@ async def process_paragraph_with_retry(db: AsyncSession, paragraph: Paragraph) -
                         answer_id = await generate_answer(db, question_id, setting)
                         generated_answer_ids.append(answer_id)
                         logging.info(f"generated_answer_id: {answer_id}")
-                        
+
                         # Generate answer ratings
-                        rating_id = await generate_answer_rating(db, question_id, answer_id)
+                        rating_id = await generate_answer_rating(
+                            db, question_id, answer_id
+                        )
                         generated_rating_ids.append(rating_id)
                         logging.info(f"generated_rating_id: {rating_id}")
                 except Exception as e:
                     logging.error(f"Error processing question: {question_id}")
                     logging.error(str(e))
                     raise
-            
-            largest_processed = (await db.execute(select(Metadata.value).where(Metadata.key == "largest_processed"))).scalar()
+
+            largest_processed = (
+                await db.execute(
+                    select(Metadata.value).where(Metadata.key == "largest_processed")
+                )
+            ).scalar()
             if largest_processed is None:
-                largest_processed = (await db.execute(select(func.max(Paragraph.processed)))).scalar()
+                largest_processed = (
+                    await db.execute(select(func.max(Paragraph.processed)))
+                ).scalar()
                 metadata = Metadata(key="largest_processed", value=largest_processed)
                 db.add(metadata)
                 await db.flush()
                 await db.refresh(metadata, ["id"])
             largest_processed = int(largest_processed)
             logging.info("largest_processed: ", largest_processed)
-            
+
             await db.execute(
-                update(Paragraph).where(Paragraph.id == paragraph_id).values(processed=largest_processed + 1)
+                update(Paragraph)
+                .where(Paragraph.id == paragraph_id)
+                .values(processed=largest_processed + 1)
             )
             await db.execute(
-                update(Metadata).where(Metadata.key == "largest_processed").values(value=largest_processed + 1)
+                update(Metadata)
+                .where(Metadata.key == "largest_processed")
+                .values(value=largest_processed + 1)
             )
             await db.commit()
             logging.info(f"Processed paragraph: {paragraph_id}")
-            
+
             return generated_question_ids, generated_answer_ids, generated_rating_ids
-        
+
         except Exception as e:
             await db.rollback()
             logging.error(str(e))
@@ -137,8 +179,11 @@ async def process_paragraph_with_retry(db: AsyncSession, paragraph: Paragraph) -
                 logging.info(f"Retrying in {retry_delay} seconds...")
                 await asyncio.sleep(retry_delay)
             else:
-                logging.error(f"Max retries reached for paragraph: {paragraph_id}. Skipping.")
+                logging.error(
+                    f"Max retries reached for paragraph: {paragraph_id}. Skipping."
+                )
                 raise
+
 
 ############################ Generation Functions ############################
 # Generate questions for a paragraph
@@ -186,10 +231,12 @@ async def generate_questions(
             logging.info(f"Prompt: {prompt}")
             time.sleep(randwait(WAIT))
             output = llm_safe_request(prompt, MODEL, STOP)
-            logging.info(f"Generated questions: {output['choices'][0]['message']['content']}")
+            logging.info(
+                f"Generated questions: {output['choices'][0]['message']['content']}"
+            )
             new_questions = [
                 x[2:].strip()
-                for x in output["choices"][0]['message']['content'].strip().split("\n")
+                for x in output["choices"][0]["message"]["content"].strip().split("\n")
                 if re.match(r"^[0-9]\.", x)
             ]
             return existing_questions + new_questions
@@ -205,12 +252,16 @@ async def generate_questions(
                 logging.info(f"Checking if answerable: {q}")
                 q_is_answerable_ic = is_answerable(q, fact)
                 q_is_answerable_zs = is_answerable(q)
-                logging.info(f"Answerable in IC: {q_is_answerable_ic}, Answerable in ZS: {q_is_answerable_zs}")
+                logging.info(
+                    f"Answerable in IC: {q_is_answerable_ic}, Answerable in ZS: {q_is_answerable_zs}"
+                )
                 if q_is_answerable_ic and q_is_answerable_zs:
                     good_questions.append(q)
             logging.info(f"Good Questions {attempts}: {good_questions}")
         if len(good_questions) < k:
-            logging.error(f"Failed to get {k} questions after {max_attempts} attempts, current number of questions: {len(good_questions)}, for fact: {fact}")
+            logging.error(
+                f"Failed to get {k} questions after {max_attempts} attempts, current number of questions: {len(good_questions)}, for fact: {fact}"
+            )
 
         logging.info(f"Good Questions: {good_questions}")
 
@@ -236,6 +287,7 @@ async def generate_questions(
     except Exception as e:
         logging.error(str(e))
         raise
+
 
 # generate the questions with only one turn and reject all unanswerable questions
 async def generate_questions_single_turn(
@@ -266,10 +318,12 @@ async def generate_questions_single_turn(
         async def generate_and_reject_unanswerable_questions():
             time.sleep(randwait(WAIT))
             output = llm_safe_request(prompt, MODEL, STOP)
-            logging.info(f"Generated questions: {output['choices'][0]['message']['content']}")
+            logging.info(
+                f"Generated questions: {output['choices'][0]['message']['content']}"
+            )
             new_questions = [
                 x[2:].strip()
-                for x in output["choices"][0]['message']['content'].strip().split("\n")
+                for x in output["choices"][0]["message"]["content"].strip().split("\n")
                 if re.match(r"^[0-9]\.", x)
             ]
             good_questions = []
@@ -277,7 +331,9 @@ async def generate_questions_single_turn(
                 logging.info(f"Checking if answerable: {q}")
                 q_is_answerable_ic = is_answerable(q, fact)
                 q_is_answerable_zs = is_answerable(q)
-                logging.info(f"Answerable in IC: {q_is_answerable_ic}, Answerable in ZS: {q_is_answerable_zs}")
+                logging.info(
+                    f"Answerable in IC: {q_is_answerable_ic}, Answerable in ZS: {q_is_answerable_zs}"
+                )
                 if q_is_answerable_ic and q_is_answerable_zs:
                     good_questions.append(q)
                 else:
@@ -326,10 +382,11 @@ async def generate_questions_single_turn(
         logging.error(str(e))
         raise
 
+
 async def generate_answer(
     db: AsyncSession,
     question_id: int,
-    context: str = None,
+    setting: str = None,
     max_attempts: int = MAX_ATTEMPTS,
 ):
     try:
@@ -341,11 +398,9 @@ async def generate_answer(
         paragraph = await db.get(Paragraph, question.paragraph_id)
         _, fact = generate_fact_with_context(paragraph)
 
-        if context:
-            setting = "ic"
+        if setting == "ic":
             context_prompt = f"Using this fact: {fact} \n\n "
         else:
-            setting = "zs"
             context_prompt = ""
 
         prompt, template = generate_prompts_from_template(
@@ -365,7 +420,7 @@ async def generate_answer(
             attempts += 1
             time.sleep(randwait(WAIT))
             output = llm_safe_request(prompt, MODEL, STOP)
-            answer_text = output["choices"][0]['message']['content'].strip()
+            answer_text = output["choices"][0]["message"]["content"].strip()
 
             if answer_text:
                 answer = Answer(
@@ -387,6 +442,7 @@ async def generate_answer(
     except Exception as e:
         logging.error(f"An error occurred at generate_answer: {e}")
 
+
 async def generate_answer_rating(
     db: AsyncSession,
     question_id: int,
@@ -400,7 +456,6 @@ async def generate_answer_rating(
         paragraph = await db.get(Paragraph, question.paragraph_id)
         answer = await db.get(Answer, answer_id)
         _, reference = generate_fact_with_context(paragraph)
-
 
         prompt, template = generate_prompts_from_template(
             prompt_template,
@@ -423,9 +478,11 @@ async def generate_answer_rating(
             attempts += 1
             time.sleep(randwait(WAIT))
             output = llm_safe_request(prompt, MODEL, STOP)
-            rating_raw = output["choices"][0]['message']['content'].strip()
+            rating_raw = output["choices"][0]["message"]["content"].strip()
 
-            if re.search(r"Rationale:", rating_raw, re.I) and re.search(r"[0-5]", rating_raw):
+            if re.search(r"Rationale:", rating_raw, re.I) and re.search(
+                r"[0-5]", rating_raw
+            ):
                 score = int(re.search(r"[0-5]", rating_raw).group())
                 rationale = "".join(rating_raw.split("Rationale:", re.I)[1:]).strip()
 
@@ -438,11 +495,15 @@ async def generate_answer_rating(
                     author_id=author_id,
                     timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 )
-                logging.info(f"Generated rating: {rating.value} for answer: {answer.text} with rationale: {rating.text}")
+                logging.info(
+                    f"Generated rating: {rating.value} for answer: {answer.text} with rationale: {rating.text}"
+                )
                 db.add(rating)
                 await db.flush()
                 await db.refresh(rating, ["id"])
-                logging.debug(f"Generated rating: {rating.value} for answer: {answer.text} with rationale: {rating.text}, id: {rating.id}")
+                logging.debug(
+                    f"Generated rating: {rating.value} for answer: {answer.text} with rationale: {rating.text}, id: {rating.id}"
+                )
                 rating_id = rating.id
                 return rating_id
 
@@ -452,15 +513,17 @@ async def generate_answer_rating(
     except Exception as e:
         logging.error(f"An error occurred at generate_answer_rating: {e}")
 
+
 ############################ Helper Functions ############################
 def generate_fact_with_context(paragraph: Paragraph):
     if paragraph.subsubsection_name and paragraph.subsection_name:
-        context = f"In an article about \'{paragraph.page_name}\', section \'{paragraph.section_name}\', subsection \'{paragraph.subsection_name}\', paragraph \'{paragraph.subsubsection_name}\'"
+        context = f"In an article about '{paragraph.page_name}', section '{paragraph.section_name}', subsection '{paragraph.subsection_name}', paragraph '{paragraph.subsubsection_name}'"
     elif paragraph.subsection_name:
-        context = f"In an article about \'{paragraph.page_name}\', section \'{paragraph.section_name}\', subsection \'{paragraph.subsection_name}\'"
+        context = f"In an article about '{paragraph.page_name}', section '{paragraph.section_name}', subsection '{paragraph.subsection_name}'"
     else:
-        context = f"In an article about \'{paragraph.page_name}\', section \'{paragraph.section_name}\'"
-    return context, f"{context} mentioned: \n {paragraph.text_cleaned}" 
+        context = f"In an article about '{paragraph.page_name}', section '{paragraph.section_name}'"
+    return context, f"{context} mentioned: \n {paragraph.text_cleaned}"
+
 
 def is_answerable(question, fact=""):
     if not question.strip():
@@ -469,7 +532,7 @@ def is_answerable(question, fact=""):
     time.sleep(randwait(WAIT))
     if not fact:
         prompt = f"Is the following question: \n\n {question} \n\n answerable without additional context? \n\n Reply 'YES' and 'NO' only."
-    else: 
+    else:
         prompt = f"Is the following question: \n\n {question} \n\n answerable using *only* the following fact? \n\n Fact: {fact} \n\n Reply 'YES' and 'NO' only."
 
     output = llm_safe_request(

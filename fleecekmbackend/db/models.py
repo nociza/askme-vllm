@@ -36,6 +36,7 @@ class Question(Base):
     timestamp = Column(String(255))
     upvote = Column(Integer)
     downvote = Column(Integer)
+    turns = Column(String(63), default="multi", index=True) # multi, single, or followup
 
 class Answer(Base):
     __tablename__ = "answer"
@@ -60,3 +61,16 @@ class Metadata(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     key = Column(String(1023))
     value = Column(Text)
+
+class RejectedQuestion(Base):
+    __tablename__ = "rejected_question"
+    id = Column(Integer, primary_key=True, index=True)
+    paragraph_id = Column(Integer, index=True) 
+    scope = Column(String(1023)) # the scope of the question, e.g. "single-paragraph"
+    context = Column(Text) # the context of the question for a fair zeroshot evaluation
+    text = Column(Text)
+    author_id = Column(Integer) 
+    timestamp = Column(String(255))
+    turns = Column(String(63), default="multi", index=True) # multi, single, or followup
+    is_answerable_zs = Column(Boolean, default=False) # is the question answerable in a zero-shot setting
+    is_answerable_ic = Column(Boolean, default=False) # is the question answerable in an in-context setting

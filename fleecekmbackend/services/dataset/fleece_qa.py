@@ -388,6 +388,8 @@ async def generate_answer(
     question_id: int,
     setting: str = None,
     max_attempts: int = MAX_ATTEMPTS,
+    model: str = MODEL,
+    service: str = "gpublaze",
 ):
     try:
         # process prompt template
@@ -395,10 +397,9 @@ async def generate_answer(
 
         prompt_template = "{PROMPT_PREFIX}{CONTEXT_PROMPT}Answer the following question in a succinct manner: {QUESTION}\n{PROMPT_SUFFIX}"
 
-        paragraph = await db.get(Paragraph, question.paragraph_id)
-        _, fact = generate_fact_with_context(paragraph)
-
         if setting == "ic":
+            paragraph = await db.get(Paragraph, question.paragraph_id)
+            _, fact = generate_fact_with_context(paragraph)
             context_prompt = f"Using this fact: {fact} \n\n "
         else:
             context_prompt = ""
@@ -412,14 +413,14 @@ async def generate_answer(
                 "PROMPT_SUFFIX": PROMPT_SUFFIX,
             },
         )
-        author_id = await create_author_if_not_exists(template, MODEL)
+        author_id = await create_author_if_not_exists(template, model)
 
         # main loop
         attempts = 0
         while attempts < max_attempts:
             attempts += 1
             time.sleep(randwait(WAIT))
-            output = llm_safe_request(prompt, MODEL, STOP)
+            output = llm_safe_request(prompt, model, STOP, service=service)
             answer_text = output["choices"][0]["message"]["content"].strip()
 
             if answer_text:
@@ -448,6 +449,8 @@ async def generate_answer_rating(
     question_id: int,
     answer_id: int,
     max_attempts: int = MAX_ATTEMPTS,
+    model: str = MODEL,
+    service: str = "gpublaze",
 ):
     try:
         prompt_template = "{PROMPT_PREFIX}Based on this fact: \n\n `{REFERENCE}` \n\n Rate the following answer to the question - Question: `{QUESTION}` \n\n Answer: `{ANSWER}`; give a number from 0-5 where 0 is 'No answer or completely irrelevant', 1 is 'Significantly incorrect or incomplete', 2 is 'Partially correct; major inaccuracies or omissions', 3 is 'Correct but lacks depth; minimal detail', 4 is 'Mostly correct; minor errors, includes relevant details', 5 is 'Fully accurate and detailed; clear and comprehensive'. Your answer should follow the form `Answer:<number> \n Rationale:<justify your judgment in a paragraph>`. \n{PROMPT_SUFFIX}"
@@ -468,7 +471,7 @@ async def generate_answer_rating(
             },
         )
 
-        author_id = await create_author_if_not_exists(template, MODEL)
+        author_id = await create_author_if_not_exists(template, model)
 
         logging.debug(f"Author ID: {author_id}")
 
@@ -477,7 +480,7 @@ async def generate_answer_rating(
         while attempts < max_attempts:
             attempts += 1
             time.sleep(randwait(WAIT))
-            output = llm_safe_request(prompt, MODEL, STOP)
+            output = llm_safe_request(prompt, model, STOP, service=service)
             rating_raw = output["choices"][0]["message"]["content"].strip()
 
             if re.search(r"Rationale:", rating_raw, re.I) and re.search(

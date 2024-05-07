@@ -19,7 +19,7 @@ python-dotenv = "^1.0.1"
 aiomysql = "^0.2.0"
 cryptography = "^42.0.5"
 tqdm = "^4.66.2"
-
+openai = "^1.26.0"
 
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29.4"

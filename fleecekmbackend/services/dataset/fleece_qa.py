@@ -437,9 +437,9 @@ async def generate_answer(
                 await db.refresh(answer, ["id"])
                 return answer.id
 
-            raise Exception(
-                f"Cannot generate a valid answer after {max_attempts} attempts. \n Question: {question.text}"
-            )
+        raise Exception(
+            f"Cannot generate a valid answer after {max_attempts} attempts. \n Question: {question.text}"
+        )
     except Exception as e:
         logging.error(f"An error occurred at generate_answer: {e}")
 

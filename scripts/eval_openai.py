@@ -46,6 +46,8 @@ async def process_questions():
                 result_zs = await generate_answer_rating(db, question.id, answer_id_zs)
                 logging.debug("Zeroshot Rating ID: ", result_zs)
 
+        await db.commit()
+
 
 async def main():
     await process_questions()

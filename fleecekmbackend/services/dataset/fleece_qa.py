@@ -81,7 +81,6 @@ async def process_paragraph(
             db.add(metadata)
             await db.flush()
             await db.refresh(metadata, ["id"])
-
         largest_processed = int(largest_processed)
         logging.info("largest_processed: ", largest_processed)
         await db.execute(

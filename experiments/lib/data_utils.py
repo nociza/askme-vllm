@@ -1,4 +1,5 @@
 # Imports
+from sqlalchemy import func
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.future import select
@@ -16,7 +17,10 @@ async def fetch_and_prepare_data(sample_size=10000):
     async with async_session() as session:
         # Query to fetch sample questions with turns = 'single'
         question_query = (
-            select(Question).where(Question.turns == "single").limit(sample_size)
+            select(Question)
+            .where(Question.turns == "single")
+            .order_by(func.random())
+            .limit(sample_size)
         )
 
         question_results = await session.execute(question_query)
@@ -60,6 +64,13 @@ async def fetch_and_prepare_data(sample_size=10000):
         author_df = pd.DataFrame([a.__dict__ for a in authors])
         answer_df = pd.DataFrame([a.__dict__ for a in answers])
         rating_df = pd.DataFrame([r.__dict__ for r in ratings])
+
+        # Keep only one answer per question randomly
+        answer_df = (
+            answer_df.groupby("question_id")
+            .apply(lambda x: x.sample(1))
+            .reset_index(drop=True)
+        )
 
         # Merge DataFrames
         merged_df = question_df.merge(

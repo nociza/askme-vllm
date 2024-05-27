@@ -48,10 +48,18 @@ async def generate_answer(
     else:
         context_prompt = ""
 
-    if prompt_type == "short":
+    if prompt_type == "few_words":
         prompt_template = "{PROMPT_PREFIX}{CONTEXT_PROMPT}Answer the following question in the shortest possible manner: {QUESTION}\n{PROMPT_SUFFIX}"
     elif prompt_type == "5_words":
         prompt_template = "{PROMPT_PREFIX}{CONTEXT_PROMPT}Answer the following question in under 5 words: {QUESTION}\n{PROMPT_SUFFIX}"
+    elif prompt_type == "4_words":
+        prompt_template = "{PROMPT_PREFIX}{CONTEXT_PROMPT}Answer the following question in under 4 words: {QUESTION}\n{PROMPT_SUFFIX}"
+    elif prompt_type == "3_words":
+        prompt_template = "{PROMPT_PREFIX}{CONTEXT_PROMPT}Answer the following question in under 3 words: {QUESTION}\n{PROMPT_SUFFIX}"
+    elif prompt_type == "2_words":
+        prompt_template = "{PROMPT_PREFIX}{CONTEXT_PROMPT}Answer the following question in under 2 words: {QUESTION}\n{PROMPT_SUFFIX}"
+    elif prompt_type == "1_word":
+        prompt_template = "{PROMPT_PREFIX}{CONTEXT_PROMPT}Answer the following question in one word: {QUESTION}\n{PROMPT_SUFFIX}"
     else:
         raise ValueError(f"Unknown prompt type: {prompt_type}")
 
@@ -101,64 +109,48 @@ async def generate_and_rate_answers(
     db: AsyncSession,
     questions: list[dict],
 ):
-    df = pd.DataFrame(
-        columns=[
-            "question_id",
-            "short_answer_id",
-            "short_answer_text",
-            "five_word_answer_id",
-            "five_word_answer_text",
-            "short_answer_rating_id",
-            "five_word_answer_rating_id",
-            "short_answer_rating_score",
-            "five_word_answer_rating_score",
-            "short_answer_rating_rationale",
-            "five_word_answer_rating_rationale",
-        ]
-    )
+    columns = ["question_id"] + [
+        f"{i}_word_answer_{suffix}"
+        for i in list(range(1, 6)) + ["few"]
+        for suffix in ["id", "text", "rating_id", "rating_score", "rating_rationale"]
+    ]
+
+    df = pd.DataFrame(columns=columns)
+
     for question in tqdm(questions):
-        short_answer = await generate_answer(db, question, prompt_type="short")
-        five_word_answer = await generate_answer(db, question, prompt_type="5_words")
+        answers = {}
+        for prompt_type in [
+            "5_words",
+            "4_words",
+            "3_words",
+            "2_words",
+            "1_word",
+            "few_words",
+        ]:
+            answer = await generate_answer(db, question, prompt_type=prompt_type)
+            answer_id = answer["answer_id"]
+            rating_id = await generate_answer_rating(db, question["id"], answer_id)
+            rating = await db.get(Rating, rating_id)
 
-        short_answer_id = short_answer["answer_id"]
-        five_word_answer_id = five_word_answer["answer_id"]
+            answers[f"{prompt_type}_answer_id"] = answer_id
+            answers[f"{prompt_type}_answer_text"] = answer["answer_text"]
+            answers[f"{prompt_type}_answer_rating_id"] = rating_id
+            answers[f"{prompt_type}_answer_rating_score"] = rating.value
+            answers[f"{prompt_type}_answer_rating_rationale"] = rating.text
 
-        short_answer_rating_id = await generate_answer_rating(
-            db, question["id"], short_answer_id
-        )
-        five_word_answer_rating_id = await generate_answer_rating(
-            db, question["id"], five_word_answer_id
-        )
-
-        short_answer_rating = await db.get(Rating, short_answer_rating_id)
-        five_word_answer_rating = await db.get(Rating, five_word_answer_rating_id)
-
-        short_answer_rating_score = short_answer_rating.value
-        five_word_answer_rating_score = five_word_answer_rating.value
-        short_answer_rating_rationale = short_answer_rating.text
-        five_word_answer_rating_rationale = five_word_answer_rating.text
+        row_data = {
+            "question_id": question["id"],
+            **{k: v for k, v in answers.items() if k.startswith("short")},
+            **{k: v for k, v in answers.items() if k.startswith("5_word")},
+            **{k: v for k, v in answers.items() if k.startswith("4_word")},
+            **{k: v for k, v in answers.items() if k.startswith("3_word")},
+            **{k: v for k, v in answers.items() if k.startswith("2_word")},
+            **{k: v for k, v in answers.items() if k.startswith("1_word")},
+            **{k: v for k, v in answers.items() if k.startswith("few_word")},
+        }
 
         df = pd.concat(
-            [
-                df,
-                pd.DataFrame(
-                    [
-                        {
-                            "question_id": question["id"],
-                            "short_answer_id": short_answer_id,
-                            "short_answer_text": short_answer["answer_text"],
-                            "five_word_answer_id": five_word_answer_id,
-                            "five_word_answer_text": five_word_answer["answer_text"],
-                            "short_answer_rating_id": short_answer_rating_id,
-                            "five_word_answer_rating_id": five_word_answer_rating_id,
-                            "short_answer_rating_score": short_answer_rating_score,
-                            "five_word_answer_rating_score": five_word_answer_rating_score,
-                            "short_answer_rating_rationale": short_answer_rating_rationale,
-                            "five_word_answer_rating_rationale": five_word_answer_rating_rationale,
-                        }
-                    ]
-                ),
-            ],
+            [df, pd.DataFrame([row_data])],
             ignore_index=True,
         )
 

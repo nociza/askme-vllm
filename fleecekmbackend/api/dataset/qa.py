@@ -180,11 +180,11 @@ async def rate_answer(user_name: str, answer: str, question_id: str):
 
 # store the user rating the quality of a question
 @router.post("/question/feedback")
-async def question_feedback(
-    user_name: str,
-    question_id: str,
-    text: str,
-):
+@router.post("/question/feedback")
+async def question_feedback(request_body: dict):
+    user_name = request_body.get("user_name")
+    question_id = request_body.get("question_id")
+    text = request_body.get("text")
     async with async_session() as session:
         existing_author = (
             await session.execute(select(Author).where(Author.username == user_name))
@@ -207,7 +207,9 @@ async def question_feedback(
 
         feedback = Feedback(question_id=question_id, author_id=author_id, text=text)
         session.add(feedback)
+
         await session.commit()
+        await session.refresh(feedback, ["id"])
         return {"id": feedback.id}
 
 @router.get("/question/feedback")
@@ -222,31 +224,26 @@ async def get_question_feedback(question_id: str):
 
 @router.post("/question/vote")
 async def question_vote(
-    user_name: str,
-    question_id: str,
-    vote: str,
+    vote_data: dict,
+    db: Session = Depends(get_db),
 ):
+    user_name = vote_data.get("user_name")
+    question_id = vote_data.get("question_id")
+    vote = vote_data.get("vote")
+
     async with async_session() as session:
-        existing_question = (
-            await session.execute(select(Question).where(Question.id == question_id))
-        ).scalar()
-
-        if existing_question is None:
-            return {"error": "question not found"}
-
         if vote not in ["up", "down"]:
             return {"error": "invalid vote"}
-
-        if vote == "up":
-            existing_question.upvote += 1
-        else:
-            existing_question.downvote += 1
+        elif vote == "up":
+            await session.execute(
+                Question.__table__.update().where(Question.id == question_id).values(upvote=Question.upvote + 1)
+            )
+        elif vote == "down":
+            await session.execute(
+                Question.__table__.update().where(Question.id == question_id).values(downvote=Question.downvote + 1)
+            )
         await session.commit()
-        return {
-            "upvote": existing_question.upvote,
-            "downvote": existing_question.downvote,
-        }
-
+        return {"message": "vote successful"}
 
 @router.get("/progress")  # get the progress of the qa generation
 async def get_progress(db: Session = Depends(get_db)):

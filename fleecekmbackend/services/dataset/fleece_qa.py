@@ -68,32 +68,30 @@ async def process_paragraph(
                 logging.error(str(e))
                 raise
 
-        largest_processed = (
-            await db.execute(
-                select(Metadata.value).where(Metadata.key == "largest_processed")
-            )
-        ).scalar()
-        if largest_processed is None:
-            largest_processed = (
-                await db.execute(select(func.max(Paragraph.processed)))
-            ).scalar()
-            metadata = Metadata(key="largest_processed", value=largest_processed)
-            db.add(metadata)
-            await db.flush()
-            await db.refresh(metadata, ["id"])
-        largest_processed = int(largest_processed)
-        logging.info("largest_processed: ", largest_processed)
+        # largest_processed = (
+        #     await db.execute(
+        #         select(Metadata.value).where(Metadata.key == "largest_processed")
+        #     )
+        # ).scalar()
+        # if largest_processed is None:
+        #     largest_processed = (
+        #         await db.execute(select(func.max(Paragraph.processed)))
+        #     ).scalar()
+        #     metadata = Metadata(key="largest_processed", value=largest_processed)
+        #     db.add(metadata)
+        #     await db.flush()
+        #     await db.refresh(metadata, ["id"])
+        # largest_processed = int(largest_processed)
+        # logging.info("largest_processed: ", largest_processed)
         await db.execute(
-            update(Paragraph)
-            .where(Paragraph.id == paragraph_id)
-            .values(processed=largest_processed + 1)
+            update(Paragraph).where(Paragraph.id == paragraph_id).values(processed=1)
         )
-        await db.execute(
-            update(Metadata)
-            .where(Metadata.key == "largest_processed")
-            .values(value=largest_processed + 1)
-        )
-        await db.commit()
+        # await db.execute(
+        #     update(Metadata)
+        #     .where(Metadata.key == "largest_processed")
+        #     .values(value=largest_processed + 1)
+        # )
+        # await db.commit()
         logging.info(f"Processed paragraph: {paragraph_id}")
 
     except Exception as e:
@@ -140,33 +138,33 @@ async def process_paragraph_with_retry(
                     logging.error(str(e))
                     raise
 
-            largest_processed = (
-                await db.execute(
-                    select(Metadata.value).where(Metadata.key == "largest_processed")
-                )
-            ).scalar()
-            if largest_processed is None:
-                largest_processed = (
-                    await db.execute(select(func.max(Paragraph.processed)))
-                ).scalar()
-                metadata = Metadata(key="largest_processed", value=largest_processed)
-                db.add(metadata)
-                await db.flush()
-                await db.refresh(metadata, ["id"])
-            largest_processed = int(largest_processed)
-            logging.info("largest_processed: ", largest_processed)
+            # largest_processed = (
+            #     await db.execute(
+            #         select(Metadata.value).where(Metadata.key == "largest_processed")
+            #     )
+            # ).scalar()
+            # if largest_processed is None:
+            #     largest_processed = (
+            #         await db.execute(select(func.max(Paragraph.processed)))
+            #     ).scalar()
+            #     metadata = Metadata(key="largest_processed", value=largest_processed)
+            #     db.add(metadata)
+            #     await db.flush()
+            #     await db.refresh(metadata, ["id"])
+            # largest_processed = int(largest_processed)
+            # logging.info("largest_processed: ", largest_processed)
 
             await db.execute(
                 update(Paragraph)
                 .where(Paragraph.id == paragraph_id)
-                .values(processed=largest_processed + 1)
+                .values(processed=1)
             )
-            await db.execute(
-                update(Metadata)
-                .where(Metadata.key == "largest_processed")
-                .values(value=largest_processed + 1)
-            )
-            await db.commit()
+            # await db.execute(
+            #     update(Metadata)
+            #     .where(Metadata.key == "largest_processed")
+            #     .values(value=largest_processed + 1)
+            # )
+            # await db.commit()
             logging.info(f"Processed paragraph: {paragraph_id}")
 
             return generated_question_ids, generated_answer_ids, generated_rating_ids

@@ -210,6 +210,15 @@ async def question_feedback(
         await session.commit()
         return {"id": feedback.id}
 
+@router.get("/question/feedback")
+async def get_question_feedback(question_id: str):
+    async with async_session() as session:
+        feedbacks = (
+            await session.execute(
+                select(Feedback).where(Feedback.question_id == question_id)
+            )
+        ).scalars()
+        return [{"id": feedback.id, "text": feedback.text} for feedback in feedbacks]
 
 @router.post("/question/vote")
 async def question_vote(

@@ -12,31 +12,38 @@ class Paragraph(Base):
     text = Column(Text)
     section_hierarchy = Column(String(8191))
     text_cleaned = Column(Text)
-    word_count = Column(Integer) # use character count to estimate
-    is_bad = Column(Boolean) # change to llm_quality_check or similar
+    word_count = Column(Integer)  # use character count to estimate
+    is_bad = Column(Boolean)  # change to llm_quality_check or similar
     within_page_order = Column(Integer)
 
-    processed = Column(Integer, default=-1, index=True) # -1 for not processed, > 0 for processed and order
+    processed = Column(
+        Integer, default=-1, index=True
+    )  # -1 for not processed, > 0 for processed and order
+
 
 class Author(Base):
     __tablename__ = "author"
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    model = Column(String(1023)) # can be human
-    prompt = Column(Text, nullable=True) 
+    model = Column(String(1023))  # can be human
+    prompt = Column(Text, nullable=True)
     username = Column(String(1023), nullable=True)
+
 
 class Question(Base):
     __tablename__ = "question"
     id = Column(Integer, primary_key=True, index=True)
-    paragraph_id = Column(Integer, index=True) 
-    scope = Column(String(1023)) # the scope of the question, e.g. "single-paragraph"
-    context = Column(Text) # the context of the question for a fair zeroshot evaluation
+    paragraph_id = Column(Integer, index=True)
+    scope = Column(String(1023))  # the scope of the question, e.g. "single-paragraph"
+    context = Column(Text)  # the context of the question for a fair zeroshot evaluation
     text = Column(Text)
-    author_id = Column(Integer) 
+    author_id = Column(Integer)
     timestamp = Column(String(255))
     upvote = Column(Integer)
     downvote = Column(Integer)
-    turns = Column(String(63), default="multi", index=True) # multi, single, or followup
+    turns = Column(
+        String(63), default="multi", index=True
+    )  # multi, single, or followup
+
 
 class Answer(Base):
     __tablename__ = "answer"
@@ -47,14 +54,16 @@ class Answer(Base):
     timestamp = Column(String(255))
     text = Column(Text)
 
+
 class Rating(Base):
     __tablename__ = "rating"
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    text = Column(Text) # rationale for the rating
-    value = Column(Integer) # score from 1 to 5
+    text = Column(Text)  # rationale for the rating
+    value = Column(Integer)  # score from 1 to 5
     answer_id = Column(Integer)
     author_id = Column(Integer)
     timestamp = Column(String(255))
+
 
 class Metadata(Base):
     __tablename__ = "metadata"
@@ -62,15 +71,31 @@ class Metadata(Base):
     key = Column(String(1023))
     value = Column(Text)
 
+
 class RejectedQuestion(Base):
     __tablename__ = "rejected_question"
     id = Column(Integer, primary_key=True, index=True)
-    paragraph_id = Column(Integer, index=True) 
-    scope = Column(String(1023)) # the scope of the question, e.g. "single-paragraph"
-    context = Column(Text) # the context of the question for a fair zeroshot evaluation
+    paragraph_id = Column(Integer, index=True)
+    scope = Column(String(1023))  # the scope of the question, e.g. "single-paragraph"
+    context = Column(Text)  # the context of the question for a fair zeroshot evaluation
     text = Column(Text)
-    author_id = Column(Integer) 
+    author_id = Column(Integer)
     timestamp = Column(String(255))
-    turns = Column(String(63), default="multi", index=True) # multi, single, or followup
-    is_answerable_zs = Column(Boolean, default=False) # is the question answerable in a zero-shot setting
-    is_answerable_ic = Column(Boolean, default=False) # is the question answerable in an in-context setting
+    turns = Column(
+        String(63), default="multi", index=True
+    )  # multi, single, or followup
+    is_answerable_zs = Column(
+        Boolean, default=False
+    )  # is the question answerable in a zero-shot setting
+    is_answerable_ic = Column(
+        Boolean, default=False
+    )  # is the question answerable in an in-context setting
+
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    text = Column(Text)
+    question_id = Column(Integer)
+    author_id = Column(Integer)
+    timestamp = Column(String(255))

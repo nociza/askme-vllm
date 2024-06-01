@@ -91,7 +91,7 @@ async def process_paragraph(
         #     .where(Metadata.key == "largest_processed")
         #     .values(value=largest_processed + 1)
         # )
-        # await db.commit()
+        await db.commit()
         logging.info(f"Processed paragraph: {paragraph_id}")
 
     except Exception as e:
@@ -164,7 +164,7 @@ async def process_paragraph_with_retry(
             #     .where(Metadata.key == "largest_processed")
             #     .values(value=largest_processed + 1)
             # )
-            # await db.commit()
+            await db.commit()
             logging.info(f"Processed paragraph: {paragraph_id}")
 
             return generated_question_ids, generated_answer_ids, generated_rating_ids

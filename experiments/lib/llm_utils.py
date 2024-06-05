@@ -30,6 +30,14 @@ PROMPT_PREFIX, PROMPT_SUFFIX = [
     "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n",
     "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n",
 ]
+PROMPT_TYPES = [
+    "5_words",
+    "4_words",
+    "3_words",
+    "2_words",
+    "1_word",
+    "few_words",
+]
 
 
 async def generate_answer(
@@ -119,14 +127,7 @@ async def generate_and_rate_answers(
 
     for question in tqdm(questions):
         answers = {}
-        for prompt_type in [
-            "5_words",
-            "4_words",
-            "3_words",
-            "2_words",
-            "1_word",
-            "few_words",
-        ]:
+        for prompt_type in PROMPT_TYPES:
             answer = await generate_answer(db, question, prompt_type=prompt_type)
             answer_id = answer["answer_id"]
             rating_id = await generate_answer_rating(db, question["id"], answer_id)

@@ -23,6 +23,10 @@ def topic_coverage(questions):
     return synset_counts
 
 
+def preprocess_text(text):
+    pass
+
+
 def dictionary_coverage(questions):
     word_counts = Counter()
     for question in questions:

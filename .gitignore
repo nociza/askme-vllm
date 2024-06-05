@@ -11,3 +11,5 @@
 data/
 .env
 logs/
+
+experiments/data_samples/askme-*.csv

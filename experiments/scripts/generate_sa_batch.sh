@@ -23,7 +23,7 @@ process_batch() {
     batch_file=$1
     output_file=$2
     log_file=$3
-    python experiments/scripts/generate_short_answers.py $batch_file $output_file > $log_file 2>&1
+    poetry run python experiments/scripts/generate_short_answers.py $batch_file $output_file > $log_file 2>&1
 }
 
 # Process batches in parallel

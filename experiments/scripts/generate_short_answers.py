@@ -6,7 +6,9 @@ from sqlalchemy.orm import sessionmaker
 import asyncio
 import nest_asyncio
 
-generate_and_rate_answers = ultraimport("__dir__/../lib/llm_utils.py")
+generate_and_rate_answers = ultraimport(
+    "__dir__/../lib/llm_utils.py", "generate_and_rate_answers"
+)
 
 # Apply nest_asyncio to allow nested event loops
 nest_asyncio.apply()

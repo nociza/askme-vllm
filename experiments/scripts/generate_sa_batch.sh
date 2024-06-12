@@ -15,8 +15,16 @@ mkdir -p $OUTPUT_DIR
 mkdir -p $TEMP_DIR
 mkdir -p $LOGS_DIR
 
-# Split the data into smaller CSV files
-split -l $BATCH_SIZE --additional-suffix=.csv $DATA_FILE $TEMP_DIR/batch_
+# Extract the header
+header=$(head -n 1 $DATA_FILE)
+
+# Split the data into smaller CSV files, excluding the header
+tail -n +2 $DATA_FILE | split -l $BATCH_SIZE --additional-suffix=.csv - $TEMP_DIR/batch_
+
+# Prepend the header to each split file
+for batch_file in $TEMP_DIR/batch_*.csv; do
+    echo $header | cat - $batch_file > temp && mv temp $batch_file
+done
 
 # Function to process a single batch
 process_batch() {

@@ -4,7 +4,7 @@ import os
 # Configurations
 data_file = "experiments/data_samples/askme-10k.csv"
 output_dir = "temp_batches"
-batch_size = 1000
+batch_size = 500
 
 # Ensure the output directory exists
 os.makedirs(output_dir, exist_ok=True)

@@ -20,6 +20,8 @@ aiomysql = "^0.2.0"
 cryptography = "^42.0.5"
 tqdm = "^4.66.2"
 openai = "^1.26.0"
+plotly = "^5.22.0"
+nbformat = "^5.10.4"
 
 [tool.poetry.group.dev.dependencies]
 ipykernel = "^6.29.4"
@@ -32,6 +34,7 @@ nltk = "^3.8.1"
 spacy = "^3.7.4"
 pip = "^24.0"
 scikit-learn = "^1.5.0"
+ultraimport = "^0.0.7"
 
 [build-system]
 requires = ["poetry-core"]

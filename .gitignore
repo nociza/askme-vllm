@@ -11,5 +11,7 @@
 data/
 .env
 logs/
+temp/
+temp_batches/
 
 experiments/data_samples/askme-*.csv

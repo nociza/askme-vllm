@@ -3,11 +3,11 @@
 # Directories
 DATA_FILE="experiments/data_samples/askme-10k.csv"
 OUTPUT_DIR="experiments/data_samples/short_answers"
-TEMP_DIR="temp"
+TEMP_DIR="temp_batches"
 LOGS_DIR="logs"
 
 # Batch size and number of instances
-BATCH_SIZE=1000
+BATCH_SIZE=500
 NUM_INSTANCES=32
 
 # Ensure the necessary directories exist

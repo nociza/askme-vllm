@@ -15,3 +15,4 @@ temp/
 temp_batches/
 
 experiments/data_samples/askme-*.csv
+experiments/data_samples/short_answers_batches/

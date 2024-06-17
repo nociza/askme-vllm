@@ -16,9 +16,7 @@ class Paragraph(Base):
     is_bad = Column(Boolean)  # change to llm_quality_check or similar
     within_page_order = Column(Integer)
 
-    processed = Column(
-        Integer, default=-1, index=True
-    )  # -1 for not processed, > 0 for processed and order
+    processed = Column(Boolean, default=False)
 
 
 class Author(Base):

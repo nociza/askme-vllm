@@ -1,19 +1,16 @@
 import random
 from fleecekmbackend.db.ctl import async_session, engine
-from fleecekmbackend.db.models import Metadata, Paragraph, Author
-from sqlalchemy import func, select, text
+from fleecekmbackend.db.models import Paragraph, Author
+from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 import pandas as pd
 import logging
-import tqdm
-
-logging.getLogger().addHandler(logging.StreamHandler())
+from tqdm import tqdm
 
 
 async def load_csv_data(file):
     async with async_session() as db:
         try:
-            # Check if the table exists and has data
             async with engine.connect() as conn:
                 table_exists = await conn.run_sync(
                     lambda sync_conn: sync_conn.dialect.has_table(
@@ -25,13 +22,11 @@ async def load_csv_data(file):
                         select(func.max(Paragraph.id)).select_from(Paragraph.__table__)
                     )
                     count = result.scalar()
-                    if count > 0:
+                    if count and count > 0:
                         logging.info(
                             f"Dataset is already loaded with {count} entries. Skipping loading process."
                         )
                         return
-
-            # Load the dataset if the table doesn't exist or is empty
             df = pd.read_csv(file)
             df["within_page_order"] = df.groupby("page_name").cumcount()
             df = df.where(pd.notnull(df), None)
@@ -39,8 +34,6 @@ async def load_csv_data(file):
             if not table_exists:
                 async with engine.begin() as conn:
                     await conn.run_sync(Paragraph.__table__.create)
-
-            # Insert the data into the database
             async with engine.begin() as conn:
                 await conn.execute(text("SET SESSION sql_mode='NO_AUTO_VALUE_ON_ZERO'"))
 
@@ -48,15 +41,9 @@ async def load_csv_data(file):
                     await conn.execute(
                         Paragraph.__table__.insert().values(row.to_dict())
                     )
-
-                # Set processed to -1 for all paragraphs
-                await conn.execute(Paragraph.__table__.update().values(processed=-1))
-
         except Exception as e:
             logging.error(f"Error loading CSV data: {str(e)}")
-            # Rollback the transaction if an error occurs
             await conn.rollback()
-
         finally:
             logging.info("Data loading completed.")
 
@@ -108,14 +95,22 @@ async def get_random_unprocessed_paragraphs(db: AsyncSession, n: int = 1):
         return -1
 
 
-async def get_next_unprocessed_paragraphs(db: AsyncSession, n: int):
-
+async def get_next_unprocessed_paragraphs(db: AsyncSession, n: int = 1):
     try:
-        query = select(Paragraph).filter(Paragraph.processed == -1).order_by().limit(n)
+        query = (
+            select(Paragraph)
+            .filter(Paragraph.processed == False)
+            .limit(n)
+            .with_for_update(skip_locked=True)
+        )
         result = await db.execute(query)
         paragraphs = result.scalars().all()
+        if not paragraphs:
+            raise Exception("No unprocessed paragraphs found")
         return paragraphs
+
     except Exception as e:
+        await db.rollback()
         logging.error(f"Error retrieving next unprocessed paragraphs: {str(e)}")
         return []
 

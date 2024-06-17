@@ -3,16 +3,14 @@ import time
 import logging
 import asyncio
 from datetime import datetime
-from sqlalchemy import func, select, update
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Tuple
-from fleecekmbackend.db.ctl import async_session
 from fleecekmbackend.db.models import (
     Paragraph,
     Question,
     Answer,
     Rating,
-    Metadata,
     RejectedQuestion,
 )
 from fleecekmbackend.db.helpers import create_author_if_not_exists
@@ -67,30 +65,9 @@ async def process_paragraph(
                 logging.error(f"Error processing question: {question_id}")
                 logging.error(str(e))
                 raise
-
-        # largest_processed = (
-        #     await db.execute(
-        #         select(Metadata.value).where(Metadata.key == "largest_processed")
-        #     )
-        # ).scalar()
-        # if largest_processed is None:
-        #     largest_processed = (
-        #         await db.execute(select(func.max(Paragraph.processed)))
-        #     ).scalar()
-        #     metadata = Metadata(key="largest_processed", value=largest_processed)
-        #     db.add(metadata)
-        #     await db.flush()
-        #     await db.refresh(metadata, ["id"])
-        # largest_processed = int(largest_processed)
-        # logging.info("largest_processed: ", largest_processed)
         await db.execute(
             update(Paragraph).where(Paragraph.id == paragraph_id).values(processed=1)
         )
-        # await db.execute(
-        #     update(Metadata)
-        #     .where(Metadata.key == "largest_processed")
-        #     .values(value=largest_processed + 1)
-        # )
         await db.commit()
         logging.info(f"Processed paragraph: {paragraph_id}")
 
@@ -138,32 +115,11 @@ async def process_paragraph_with_retry(
                     logging.error(str(e))
                     raise
 
-            # largest_processed = (
-            #     await db.execute(
-            #         select(Metadata.value).where(Metadata.key == "largest_processed")
-            #     )
-            # ).scalar()
-            # if largest_processed is None:
-            #     largest_processed = (
-            #         await db.execute(select(func.max(Paragraph.processed)))
-            #     ).scalar()
-            #     metadata = Metadata(key="largest_processed", value=largest_processed)
-            #     db.add(metadata)
-            #     await db.flush()
-            #     await db.refresh(metadata, ["id"])
-            # largest_processed = int(largest_processed)
-            # logging.info("largest_processed: ", largest_processed)
-
             await db.execute(
                 update(Paragraph)
                 .where(Paragraph.id == paragraph_id)
-                .values(processed=1)
+                .values(processed=True)
             )
-            # await db.execute(
-            #     update(Metadata)
-            #     .where(Metadata.key == "largest_processed")
-            #     .values(value=largest_processed + 1)
-            # )
             await db.commit()
             logging.info(f"Processed paragraph: {paragraph_id}")
 
@@ -398,8 +354,10 @@ async def generate_answer(
             paragraph = await db.get(Paragraph, question.paragraph_id)
             _, fact = generate_fact_with_context(paragraph)
             context_prompt = f"Using this fact: {fact} \n\n "
-        else:
+        elif setting == "zs":
             context_prompt = ""
+        else:
+            raise Exception("Invalid setting")
 
         prompt, template = generate_prompts_from_template(
             prompt_template,

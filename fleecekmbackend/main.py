@@ -1,7 +1,7 @@
 import logging
 import asyncio
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
 from fleecekmbackend.api.dataset.raw import router as raw_dataset_router
@@ -13,6 +13,9 @@ from fleecekmbackend.services.dataset.async_generate_qa import start_background_
 
 load_csv_lock = asyncio.Lock()
 background_process_lock = asyncio.Lock()
+
+logging.root.setLevel(logging.INFO)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -28,15 +31,18 @@ async def lifespan(app: FastAPI):
             logging.error(f"Error loading CSV data: {str(e)}")
 
     async with background_process_lock:
+        print("Starting background process")
         asyncio.create_task(start_background_process())
 
     yield
+
 
 app = FastAPI(lifespan=lifespan)
 
 # Include sub-routers
 app.include_router(raw_dataset_router, prefix="/raw", tags=["raw"])
 app.include_router(qa_dataset_router, prefix="/qa", tags=["qa"])
+
 
 @app.get("/")
 async def read_root():

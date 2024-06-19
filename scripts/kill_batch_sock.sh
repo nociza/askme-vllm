@@ -13,5 +13,6 @@ done
 
 # Optionally, remove socket files
 rm -f $SOCKET_DIR/*.sock
+rm -f ./logs/*.log
 
 echo "All Uvicorn instances stopped."

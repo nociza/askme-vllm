@@ -1,11 +1,25 @@
 #!/bin/bash
 
-# Read PIDs from the file and kill each process
-while read pid; do
-    kill $pid
-done < uvicorn_pids.txt
+# PID file
+PID_FILE="/tmp/background_task_pids.txt"
 
-# Optionally, clean up the PID file
-rm uvicorn_pids.txt
+# Check if the PID file exists
+if [ ! -f $PID_FILE ]; then
+    echo "PID file not found!"
+    exit 1
+fi
 
-echo "All Uvicorn instances stopped."
+# Kill each process listed in the PID file
+while read -r pid; do
+    if [ -n "$pid" ]; then
+        kill -9 $pid
+        echo "Killed process with PID: $pid"
+    fi
+done < $PID_FILE
+
+# Remove the PID file after killing the processes
+rm -f $PID_FILE
+
+rm -f ./logs/*.log
+
+echo "All background tasks killed and PID file removed."

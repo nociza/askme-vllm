@@ -2,31 +2,26 @@
 
 export PATH="$PATH:$HOME/.local/bin"
 
-# Directory where socket files will be stored
-SOCKET_DIR=/tmp/uvicorn_sockets
+# Directory where logs will be stored
 LOGS_DIR=./logs
 
-# Create the directory if it doesn't exist
-mkdir -p $SOCKET_DIR
+# Create the logs directory if it doesn't exist
 mkdir -p $LOGS_DIR
 
 # Number of instances
-NUM_INSTANCES=32
+NUM_INSTANCES=128
 
-# Start multiple instances of the app with unique socket files
+BACKGROUND_TASK_SCRIPT="fleecekmbackend/main.py"
+
 for ((i=1; i<=NUM_INSTANCES; i++))
 do
-    # Generate a unique random hash for each socket using openssl
     UNIQUE_HASH=$(openssl rand -hex 12)
 
-    SOCKET_PATH="$SOCKET_DIR/uvicorn_app_$UNIQUE_HASH.sock"
-    LOG_FILE="$LOGS_DIR/uvicorn_app_$UNIQUE_HASH.log"
+    LOG_FILE="$LOGS_DIR/background_task_$UNIQUE_HASH.log"
     
-    # Start Uvicorn with the socket
-    poetry run uvicorn fleecekmbackend.main:app --uds $SOCKET_PATH > $LOG_FILE 2>&1 & 
+    poetry run python $BACKGROUND_TASK_SCRIPT > $LOG_FILE 2>&1 & 
 
-    # Save PID to a file
-    echo $SOCKET_PATH >> "/tmp/uvicorn_pids.txt"
+    echo $! >> "/tmp/background_task_pids.txt"
 done
 
-echo "Started $NUM_INSTANCES instances of the app."
+echo "Started $NUM_INSTANCES instances of the background task."

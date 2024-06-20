@@ -180,7 +180,6 @@ async def rate_answer(user_name: str, answer: str, question_id: str):
 
 # store the user rating the quality of a question
 @router.post("/question/feedback")
-@router.post("/question/feedback")
 async def question_feedback(request_body: dict):
     user_name = request_body.get("user_name")
     question_id = request_body.get("question_id")
@@ -212,6 +211,7 @@ async def question_feedback(request_body: dict):
         await session.refresh(feedback, ["id"])
         return {"id": feedback.id}
 
+
 @router.get("/question/feedback")
 async def get_question_feedback(question_id: str):
     async with async_session() as session:
@@ -221,6 +221,7 @@ async def get_question_feedback(question_id: str):
             )
         ).scalars()
         return [{"id": feedback.id, "text": feedback.text} for feedback in feedbacks]
+
 
 @router.post("/question/vote")
 async def question_vote(
@@ -236,14 +237,19 @@ async def question_vote(
             return {"error": "invalid vote"}
         elif vote == "up":
             await session.execute(
-                Question.__table__.update().where(Question.id == question_id).values(upvote=Question.upvote + 1)
+                Question.__table__.update()
+                .where(Question.id == question_id)
+                .values(upvote=Question.upvote + 1)
             )
         elif vote == "down":
             await session.execute(
-                Question.__table__.update().where(Question.id == question_id).values(downvote=Question.downvote + 1)
+                Question.__table__.update()
+                .where(Question.id == question_id)
+                .values(downvote=Question.downvote + 1)
             )
         await session.commit()
         return {"message": "vote successful"}
+
 
 @router.get("/progress")  # get the progress of the qa generation
 async def get_progress(db: Session = Depends(get_db)):
@@ -284,7 +290,7 @@ async def get_progress_accurate(db: Session = Depends(get_db)):
     async with async_session() as session:
         largest_processed = (
             await session.execute(
-                select(func.count(Paragraph.id)).where(Paragraph.processed != -1)
+                select(func.count(Paragraph.id)).where(Paragraph.processed == True)
             )
         ).scalar()
         total = (await session.execute(select(func.max(Paragraph.id)))).scalar()

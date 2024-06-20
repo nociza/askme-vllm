@@ -12,7 +12,9 @@ from fleecekmbackend.services.dataset.fleece_qa import (
 )
 from fleecekmbackend.db.models import Paragraph
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.WARNING, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 
 
 async def process_all_pages():

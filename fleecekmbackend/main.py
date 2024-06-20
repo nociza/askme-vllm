@@ -10,7 +10,7 @@ load_csv_lock = asyncio.Lock()
 background_process_lock = asyncio.Lock()
 
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.WARNING, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
 

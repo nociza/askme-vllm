@@ -36,6 +36,7 @@ def llm_safe_request(
     max_retries=MAX_RETRIES,
     prompt_prefix="",
     prompt_suffix="",
+    guided_choice=[],
     service="gpublaze",
 ):
     if service == "gpublaze":
@@ -51,6 +52,7 @@ def llm_safe_request(
             max_retries,
             prompt_prefix,
             prompt_suffix,
+            guided_choice,
         )
     elif service == "together":
         return together_safe_request(
@@ -145,6 +147,7 @@ def gpublaze_safe_request(
     max_retries=MAX_RETRIES,
     prompt_prefix="",
     prompt_suffix="",
+    guided_choice=[],
 ):
     # print out all the parameters
     # print(f"model: {model} \n stop: {stop} \n max_tokens: {max_tokens} \n temperature: {temperature} \n top_p: {top_p} \n top_k: {top_k} \n repetition_penalty: {repetition_penalty} \n max_retries: {max_retries} \n prompt_prefix: {prompt_prefix} \n prompt_suffix: {prompt_suffix}")
@@ -153,29 +156,56 @@ def gpublaze_safe_request(
             prompt = prompt_prefix + " " + prompt
         if prompt_suffix:
             prompt = prompt + " " + prompt_suffix
-        res = requests.post(
-            "http://gpublaze.ist.berkeley.edu:54321/v1/chat/completions",
-            headers={
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": model,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    }
-                ],
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-                "top_p": top_p,
-                "top_k": top_k,
-                "repetition_penalty": repetition_penalty,
-                "stop": stop,
-                "stream": False,
-                "safe_prompt": False,
-            },
-        )
+
+        if guided_choice:
+            res = requests.post(
+                "http://gpublaze.ist.berkeley.edu:54321/v1/chat/completions",
+                headers={
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": prompt,
+                        }
+                    ],
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "top_p": top_p,
+                    "top_k": top_k,
+                    "repetition_penalty": repetition_penalty,
+                    "stop": stop,
+                    "stream": False,
+                    "safe_prompt": False,
+                    "guided_choice": guided_choice,
+                },
+            )
+        else:
+            res = requests.post(
+                "http://gpublaze.ist.berkeley.edu:54321/v1/chat/completions",
+                headers={
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": prompt,
+                        }
+                    ],
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "top_p": top_p,
+                    "top_k": top_k,
+                    "repetition_penalty": repetition_penalty,
+                    "stop": stop,
+                    "stream": False,
+                    "safe_prompt": False,
+                },
+            )
         res.raise_for_status()
         return res.json()
     except requests.exceptions.HTTPError as e:

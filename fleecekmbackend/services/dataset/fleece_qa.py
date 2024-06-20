@@ -282,8 +282,8 @@ async def generate_questions_single_turn(
             good_questions = []
             for q in new_questions:
                 logging.info(f"Checking if answerable: {q}")
-                q_is_answerable_ic = is_answerable(q, fact)
-                q_is_answerable_zs = is_answerable(q)
+                q_is_answerable_ic = is_answerable_guided_choice(q, fact)
+                q_is_answerable_zs = is_answerable_guided_choice(q)
                 logging.info(
                     f"Answerable in IC: {q_is_answerable_ic}, Answerable in ZS: {q_is_answerable_zs}"
                 )
@@ -507,3 +507,31 @@ def is_answerable(question, fact=""):
         return True
     logging.info("Question Malformed: ", answer)
     return False
+
+
+def is_answerable_guided_choice(question, fact=""):
+    if not question.strip():
+        logging.debug("No question seen in is_answerable: ", question.strip())
+        return False
+    time.sleep(randwait(WAIT))
+    if not fact:
+        prompt = f"Is the following question: \n\n {question} \n\n a valid question without additional context? \n\n Reply 'YES' and 'NO' only."
+    else:
+        prompt = f"Is the following question: \n\n {question} \n\n answerable using only the following fact? \n\n Fact: {fact} \n\n Reply 'YES' and 'NO' only."
+
+    output = llm_safe_request(
+        prompt,
+        MODEL,
+        STOP,
+        prompt_prefix=PROMPT_PREFIX,
+        prompt_suffix=PROMPT_SUFFIX,
+        guided_choice=["YES", "NO"],
+    )
+
+    answer = output["choices"][0]["message"]["content"].strip()
+    if answer == "NO":
+        return False
+    elif answer == "YES":
+        return True
+    logging.info("Question Malformed: ", answer)
+    raise Exception("Question Malformed: ", answer)

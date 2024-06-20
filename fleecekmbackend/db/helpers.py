@@ -8,6 +8,47 @@ import logging
 from tqdm import tqdm
 
 
+async def load_csv_data_top_n(file, n):
+    async with async_session() as db:
+        try:
+            async with engine.connect() as conn:
+                table_exists = await conn.run_sync(
+                    lambda sync_conn: sync_conn.dialect.has_table(
+                        sync_conn, Paragraph.__tablename__
+                    )
+                )
+                if table_exists:
+                    result = await conn.execute(
+                        select(func.max(Paragraph.id)).select_from(Paragraph.__table__)
+                    )
+                    count = result.scalar()
+                    if count and count > 0:
+                        logging.info(
+                            f"Dataset is already loaded with {count} entries. Skipping loading process."
+                        )
+                        return
+            df = pd.read_csv(file)
+            df["within_page_order"] = df.groupby("page_name").cumcount()
+            df = df.where(pd.notnull(df), None)
+            df = df.head(n)
+
+            if not table_exists:
+                async with engine.begin() as conn:
+                    await conn.run_sync(Paragraph.__table__.create)
+            async with engine.begin() as conn:
+                await conn.execute(text("SET SESSION sql_mode='NO_AUTO_VALUE_ON_ZERO'"))
+
+                for _, row in tqdm(df.iterrows(), total=n, desc="Inserting data"):
+                    await conn.execute(
+                        Paragraph.__table__.insert().values(row.to_dict())
+                    )
+        except Exception as e:
+            logging.error(f"Error loading CSV data: {str(e)}")
+            await conn.rollback()
+        finally:
+            logging.info("Data loading completed.")
+
+
 async def load_csv_data(file):
     async with async_session() as db:
         try:

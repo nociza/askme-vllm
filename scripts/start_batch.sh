@@ -9,7 +9,7 @@ LOGS_DIR=./logs
 mkdir -p $LOGS_DIR
 
 # Number of instances
-NUM_INSTANCES=256
+NUM_INSTANCES=128
 
 BACKGROUND_TASK_SCRIPT="fleecekmbackend/main.py"
 

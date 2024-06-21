@@ -6,7 +6,7 @@ from fleecekmbackend.db.helpers import (
     get_random_unprocessed_paragraphs,
     get_next_unprocessed_paragraphs,
 )
-from fleecekmbackend.services.dataset.fleece_qa import (
+from fleecekmbackend.services.generation.fleece_qa import (
     process_paragraph,
     process_paragraph_with_retry,
 )

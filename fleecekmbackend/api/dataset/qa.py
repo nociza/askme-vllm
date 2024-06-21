@@ -10,10 +10,8 @@ from fleecekmbackend.db.models import (
     Metadata,
     Feedback,
 )
-from fleecekmbackend.services.dataset.fleece_qa import (
-    generate_answer_rating,
-    generate_fact_with_context,
-)
+from fleecekmbackend.services.dataset.common import generate_fact_with_context
+from fleecekmbackend.services.dataset.ratings import generate_answer_rating
 from sqlalchemy import func, select
 import logging
 import sys
@@ -40,23 +38,15 @@ async def random_sample_r2l(n: int):
         while not question:
             max_offset = (
                 await session.execute(
-                    select(Metadata.value).where(Metadata.key == "largest_processed")
+                    select(func.count(Paragraph.id)).where(Paragraph.processed == True)
                 )
             ).scalar()
-            if max_offset is None:
-                max_offset = (
-                    await session.execute(select(func.max(Paragraph.processed)))
-                ).scalar()
-                metadata = Metadata(key="largest_processed", value=max_offset)
-                session.add(metadata)
-                await session.commit()
-
             offset = random.randint(0, int(max_offset))
             # get a random paragraph that has been processed
             paragraph = (
                 await session.execute(
                     select(Paragraph)
-                    .where(Paragraph.processed != -1)
+                    .where(Paragraph.processed == True)
                     .offset(offset)
                     .limit(1)
                 )

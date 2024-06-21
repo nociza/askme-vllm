@@ -7,7 +7,6 @@ from fleecekmbackend.db.models import (
     Answer,
     Author,
     Rating,
-    Metadata,
     Feedback,
 )
 from fleecekmbackend.services.dataset.common import generate_fact_with_context
@@ -239,40 +238,6 @@ async def question_vote(
             )
         await session.commit()
         return {"message": "vote successful"}
-
-
-@router.get("/progress")  # get the progress of the qa generation
-async def get_progress(db: Session = Depends(get_db)):
-    async with async_session() as session:
-        largest_processed = (
-            await session.execute(
-                select(Metadata.value).where(Metadata.key == "largest_processed")
-            )
-        ).scalar()
-        if largest_processed is None:
-            largest_processed = await session.execute(
-                select(func.max(Paragraph.processed))
-            ).scalar()
-            metadata = Metadata(key="largest_processed", value=largest_processed)
-            session.add(metadata)
-            await session.commit()
-
-        total = (
-            await session.execute(
-                select(Metadata.value).where(Metadata.key == "num_paragraphs")
-            )
-        ).scalar()
-        if total is None:
-            total = (await session.execute(select(func.max(Paragraph.id)))).scalar()
-            metadata = Metadata(key="num_paragraphs", value=total)
-            session.add(metadata)
-            await session.commit()
-
-        return {
-            "progress": int(largest_processed),
-            "total": int(total),
-            "percentage": int(largest_processed) / int(total) * 100,
-        }
 
 
 @router.get("/progress-accurate")

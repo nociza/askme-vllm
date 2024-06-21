@@ -4,8 +4,8 @@ import logging
 from fleecekmbackend.db.ctl import create_tables_if_not_exist
 from fleecekmbackend.db.helpers import load_csv_data
 from fleecekmbackend.core.config import DATASET_PATH
-from fleecekmbackend.services.generation.async_generate_qa import (
-    start_background_process,
+from fleecekmbackend.services.generation.end2end import (
+    start_background_process_e2e,
 )
 
 load_csv_lock = asyncio.Lock()
@@ -30,7 +30,7 @@ async def main():
 
     async with background_process_lock:
         print("Starting background process")
-        await start_background_process()
+        await start_background_process_e2e()
 
 
 if __name__ == "__main__":

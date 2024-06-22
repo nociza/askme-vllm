@@ -22,8 +22,8 @@ async def main():
     async with load_csv_lock:
         try:
             with open(DATASET_PATH, "r") as file:
-                # await load_csv_data(file)
-                await load_csv_data_top_n(file, 100)
+                await load_csv_data(file)
+                # await load_csv_data_top_n(file, 100)
         except FileNotFoundError:
             logging.error("CSV file not found. Skipping data loading.")
         except Exception as e:
@@ -32,11 +32,11 @@ async def main():
     async with background_process_lock:
         print("Starting background process")
         # Choose between end2end and stage2stage processing
-        start_time = time.time()
+        # start_time = time.time()
         # await start_background_process_e2e()  # Uncomment this line if you want to use end2end processing
-        await start_background_process_s2s(16)  # Use stage2stage processing
-        end_time = time.time()
-        print(f"Background process execution time: {end_time - start_time}")
+        await start_background_process_e2e()  # Use stage2stage processing
+        # end_time = time.time()
+        # print(f"Background process execution time: {end_time - start_time}")
 
 
 if __name__ == "__main__":

@@ -134,7 +134,7 @@ async def process_all_pages_e2e():
         async with async_session() as db:
             # Check if there are any unprocessed paragraphs
             unprocessed_paragraph_exists = await db.scalar(
-                select(func.max(Paragraph.id)).where(Paragraph.processed == -1)
+                select(Paragraph.id).where(Paragraph.processed == False).limit(1)
             )
 
             if not unprocessed_paragraph_exists:
@@ -177,7 +177,7 @@ async def process_all_pages_e2e_parallel(batch_size=5):
     while True:
         async with async_session() as db:
             unprocessed_paragraph_exists = await db.scalar(
-                select(func.max(Paragraph.id)).where(Paragraph.processed == False)
+                select(Paragraph.id).where(Paragraph.processed == False).limit(1)
             )
 
             if not unprocessed_paragraph_exists:

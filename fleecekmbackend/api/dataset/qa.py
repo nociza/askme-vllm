@@ -159,7 +159,7 @@ async def rate_answer(user_name: str, answer: str, question_id: str):
         await session.refresh(answer, ["id"])
         answer_id = answer.id
 
-        rating_id = await generate_answer_rating(session, question_id, answer_id)
+        rating_id = await generate_answer_rating(session, answer_id)
         await session.commit()
         rating = (
             await session.execute(select(Rating).where(Rating.id == rating_id))

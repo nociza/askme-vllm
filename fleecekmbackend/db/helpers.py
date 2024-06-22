@@ -1,6 +1,6 @@
 import random
 from fleecekmbackend.db.ctl import async_session, engine
-from fleecekmbackend.db.models import Paragraph, Author
+from fleecekmbackend.db.models import Paragraph, Author, Question, Answer
 from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 import pandas as pd
@@ -153,6 +153,46 @@ async def get_next_unprocessed_paragraphs(db: AsyncSession, n: int = 1):
     except Exception as e:
         await db.rollback()
         logging.error(f"Error retrieving next unprocessed paragraphs: {str(e)}")
+        return []
+
+
+async def get_next_unprocessed_questions(db: AsyncSession, n: int = 1):
+    try:
+        query = (
+            select(Question)
+            .filter(Question.processed == False)
+            .limit(n)
+            .with_for_update(skip_locked=True)
+        )
+        result = await db.execute(query)
+        questions = result.scalars().all()
+        if not questions:
+            raise Exception("No unprocessed questions found")
+        return questions
+
+    except Exception as e:
+        await db.rollback()
+        logging.error(f"Error retrieving next unprocessed questions: {str(e)}")
+        return []
+
+
+async def get_next_unprocessed_answers(db: AsyncSession, n: int = 1):
+    try:
+        query = (
+            select(Answer)
+            .filter(Answer.processed == False)
+            .limit(n)
+            .with_for_update(skip_locked=True)
+        )
+        result = await db.execute(query)
+        answers = result.scalars().all()
+        if not answers:
+            raise Exception("No unprocessed answers found")
+        return answers
+
+    except Exception as e:
+        await db.rollback()
+        logging.error(f"Error retrieving next unprocessed answers: {str(e)}")
         return []
 
 

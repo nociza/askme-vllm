@@ -28,7 +28,6 @@ from fleecekmbackend.core.config import (
 
 async def generate_answer_rating(
     db: AsyncSession,
-    question_id: int,
     answer_id: int,
     max_attempts: int = MAX_ATTEMPTS,
     model: str = MODEL,
@@ -37,9 +36,10 @@ async def generate_answer_rating(
     try:
         prompt_template = "{PROMPT_PREFIX}Based on this fact: \n\n `{REFERENCE}` \n\n Rate the following answer to the question - Question: `{QUESTION}` \n\n Answer: `{ANSWER}`; give a number from 0-5 where 0 is 'No answer or completely irrelevant', 1 is 'Significantly incorrect or incomplete', 2 is 'Partially correct; major inaccuracies or omissions', 3 is 'Correct but lacks depth; minimal detail', 4 is 'Mostly correct; minor errors, includes relevant details', 5 is 'Fully accurate and detailed; clear and comprehensive'. Your answer should follow the form `Answer:<number> \n Rationale:<justify your judgment in a paragraph>`. \n{PROMPT_SUFFIX}"
 
-        question = await db.get(Question, question_id)
-        paragraph = await db.get(Paragraph, question.paragraph_id)
         answer = await db.get(Answer, answer_id)
+        question = await db.get(Question, answer.question_id)
+        paragraph = await db.get(Paragraph, question.paragraph_id)
+
         _, reference = generate_fact_with_context(paragraph)
 
         prompt, template = generate_prompts_from_template(

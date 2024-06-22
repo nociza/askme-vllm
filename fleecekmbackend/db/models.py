@@ -42,6 +42,8 @@ class Question(Base):
         String(63), default="multi", index=True
     )  # multi, single, or followup
 
+    processed = Column(Boolean, default=False)
+
 
 class Answer(Base):
     __tablename__ = "answer"
@@ -51,6 +53,8 @@ class Answer(Base):
     setting = Column(Enum("zs", "ic", "human"))
     timestamp = Column(String(255))
     text = Column(Text)
+
+    processed = Column(Boolean, default=False)
 
 
 class Rating(Base):

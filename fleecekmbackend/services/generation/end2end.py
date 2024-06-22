@@ -50,7 +50,7 @@ async def process_paragraph_e2e(
                     logging.info(f"generated_answer_id: {answer_id}")
 
                     # Generate answer ratings
-                    rating_id = await generate_answer_rating(db, question_id, answer_id)
+                    rating_id = await generate_answer_rating(db, answer_id)
                     generated_rating_ids.append(rating_id)
                     logging.info(f"generated_rating_id: {rating_id}")
 
@@ -98,9 +98,7 @@ async def process_paragraph_e2e_with_retry(
                         logging.info(f"generated_answer_id: {answer_id}")
 
                         # Generate answer ratings
-                        rating_id = await generate_answer_rating(
-                            db, question_id, answer_id
-                        )
+                        rating_id = await generate_answer_rating(db, answer_id)
                         generated_rating_ids.append(rating_id)
                         logging.info(f"generated_rating_id: {rating_id}")
                 except Exception as e:

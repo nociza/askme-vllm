@@ -1,12 +1,14 @@
+import asyncio
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from sqlalchemy import update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
+from typing import List, Tuple
 
 from fleecekmbackend.db.ctl import async_session
 from fleecekmbackend.db.helpers import (
     get_next_unprocessed_paragraphs,
+    get_next_unprocessed_questions,
+    get_next_unprocessed_answers,
 )
 from fleecekmbackend.db.models import (
     Paragraph,
@@ -19,13 +21,13 @@ from fleecekmbackend.services.dataset.answers import generate_answer
 from fleecekmbackend.services.dataset.ratings import generate_answer_rating
 
 logging.basicConfig(
-    level=logging.WARNING, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
 
-def generate_questions_stage(db: AsyncSession, paragraph: Paragraph) -> List[int]:
+async def generate_questions_stage(db: AsyncSession, paragraph: Paragraph) -> List[int]:
     try:
-        question_ids = generate_questions_single_turn(db, paragraph)
+        question_ids = await generate_questions_single_turn(db, paragraph)
         logging.info(f"Generated questions: {question_ids}")
         return question_ids
     except Exception as e:
@@ -34,11 +36,11 @@ def generate_questions_stage(db: AsyncSession, paragraph: Paragraph) -> List[int
         raise
 
 
-def generate_answers_stage(db: AsyncSession, question_id: int) -> List[int]:
+async def generate_answers_stage(db: AsyncSession, question_id: int) -> List[int]:
     generated_answer_ids = []
     try:
         for setting in ["zs", "ic"]:
-            answer_id = generate_answer(db, question_id, setting)
+            answer_id = await generate_answer(db, question_id, setting)
             generated_answer_ids.append(answer_id)
             logging.info(f"Generated answer ID: {answer_id}")
         return generated_answer_ids
@@ -48,9 +50,9 @@ def generate_answers_stage(db: AsyncSession, question_id: int) -> List[int]:
         raise
 
 
-def generate_ratings_stage(db: AsyncSession, question_id: int, answer_id: int) -> int:
+async def generate_ratings_stage(db: AsyncSession, answer_id: int) -> int:
     try:
-        rating_id = generate_answer_rating(db, question_id, answer_id)
+        rating_id = await generate_answer_rating(db, answer_id)
         logging.info(f"Generated rating ID: {rating_id}")
         return rating_id
     except Exception as e:
@@ -60,70 +62,56 @@ def generate_ratings_stage(db: AsyncSession, question_id: int, answer_id: int) -
 
 
 async def process_all_paragraphs_s2s(batch_size=5):
-    with async_session() as db:
-        while True:
+    # Stage 1: Generate Questions
+    while True:
+        async with async_session() as db:
             paragraphs = await get_next_unprocessed_paragraphs(db, batch_size)
             if not paragraphs:
                 logging.info("No unprocessed paragraphs found. Stopping the process.")
                 break
-
-            # Stage 1: Generate Questions
             logging.info(f"Processing {len(paragraphs)} paragraphs")
-            with ThreadPoolExecutor(max_workers=batch_size) as executor:
-                future_to_paragraph = {
-                    executor.submit(generate_questions_stage, db, paragraph): paragraph
-                    for paragraph in paragraphs
-                }
-                questions_by_paragraph = []
-                for future in as_completed(future_to_paragraph):
-                    try:
-                        questions_by_paragraph.append(future.result())
-                    except Exception as e:
-                        logging.error(f"Error in generate_questions_stage: {e}")
-
-            # Flatten the list of lists of question IDs
-            question_ids = [qid for qlist in questions_by_paragraph for qid in qlist]
-
-            # Stage 2: Generate Answers
-            with ThreadPoolExecutor(max_workers=batch_size) as executor:
-                future_to_question = {
-                    executor.submit(
-                        generate_answers_stage, db, question_id
-                    ): question_id
-                    for question_id in question_ids
-                }
-                answers_by_question = []
-                for future in as_completed(future_to_question):
-                    try:
-                        answers_by_question.append(future.result())
-                    except Exception as e:
-                        logging.error(f"Error in generate_answers_stage: {e}")
-
-            # Flatten the list of lists of answer IDs
-            answer_ids = [aid for alist in answers_by_question for aid in alist]
-
-            # Stage 3: Generate Ratings
-            with ThreadPoolExecutor(max_workers=batch_size) as executor:
-                future_to_answer = {
-                    executor.submit(
-                        generate_ratings_stage, db, question_id, answer_id
-                    ): (question_id, answer_id)
-                    for question_id, answer_id in zip(question_ids, answer_ids)
-                }
-                for future in as_completed(future_to_answer):
-                    try:
-                        future.result()
-                    except Exception as e:
-                        logging.error(f"Error in generate_ratings_stage: {e}")
-
-            # Mark paragraphs as processed
+            tasks = []
             for paragraph in paragraphs:
-                db.execute(
-                    update(Paragraph)
-                    .where(Paragraph.id == paragraph.id)
-                    .values(processed=True)
-                )
+                task = asyncio.create_task(generate_questions_stage(db, paragraph))
+                tasks.append(task)
+            await asyncio.gather(*tasks)
+            db.flush()
             db.commit()
+    logging.info(f"Generated questions for {len(paragraphs)} paragraphs")
+
+    # Stage 2: Generate Answers
+    while True:
+        async with async_session() as db:
+            questions = await get_next_unprocessed_questions(db, batch_size)
+            if not questions:
+                logging.info("No unprocessed questions found. Stopping the process.")
+                break
+            logging.info(f"Processing {len(questions)} questions")
+            tasks = []
+            for question in questions:
+                task = asyncio.create_task(generate_answers_stage(db, question.id))
+                tasks.append(task)
+            await asyncio.gather(*tasks)
+            db.flush()
+            db.commit()
+    logging.info(f"Generated answers for {len(questions)} questions")
+
+    # Stage 3: Generate Ratings
+    while True:
+        async with async_session() as db:
+            answers = await get_next_unprocessed_answers(db, batch_size)
+            if not answers:
+                logging.info("No unprocessed answers found. Stopping the process.")
+                break
+            logging.info(f"Processing {len(answers)} answers")
+            tasks = []
+            for answer in answers:
+                task = asyncio.create_task(generate_ratings_stage(db, answer.id))
+                tasks.append(task)
+            await asyncio.gather(*tasks)
+            db.flush()
+            db.commit()
+    logging.info(f"Generated ratings for {len(answers)} answers")
 
 
 async def start_background_process_s2s(batch_size=64):

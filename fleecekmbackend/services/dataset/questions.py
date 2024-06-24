@@ -4,6 +4,7 @@ import logging
 import asyncio
 import traceback
 from datetime import datetime
+from typing import List
 from sqlalchemy.ext.asyncio import AsyncSession
 from fleecekmbackend.db.models import (
     Paragraph,
@@ -34,9 +35,9 @@ logging.basicConfig(
 
 
 ###################################################################################################
-#                                       Question Generation                                       #
+#                                        Combined Functions                                       #
 ###################################################################################################
-async def generate_questions_with_retry(
+async def generate_n_filter_questions_with_retry(
     db: AsyncSession,
     paragraph: Paragraph,
     k: int = NUMQUESTIONS,
@@ -139,7 +140,7 @@ async def generate_questions_with_retry(
 
 
 # generate the questions with only one turn and reject all unanswerable questions
-async def generate_questions_single_turn(
+async def generate_n_filter_questions_single_turn(
     db: AsyncSession,
     paragraph: Paragraph,
     k: int = NUMQUESTIONS,
@@ -240,6 +241,88 @@ async def generate_questions_single_turn(
         logging.error(str(e))
         logging.error(traceback.format_exc())
         raise "Error generating questions for paragraph" from e
+
+
+###################################################################################################
+#                                       Question Generation                                       #
+###################################################################################################
+async def generate_questions_single_turn(
+    paragraph: Paragraph,
+    k: int = NUMQUESTIONS,
+) -> List[Question]:
+    try:
+        prompt_template = "{PROMPT_PREFIX}Generate {NUM_QUESTIONS} short answer questions about the facts mentioned in the following paragraph. The questions should be self-contained; meaning you avoid using references such as 'it', 'the game', 'the person', etc., but should directly include the name of the referenced item instead. Remember to include relevant context in the question. \n\nParagraph: {PARAGRAPH}\n{PROMPT_SUFFIX}"
+        context, fact = generate_fact_with_context(paragraph)
+        prompt, template = generate_prompts_from_template(
+            prompt_template,
+            {
+                "PARAGRAPH": fact,
+                "PROMPT_PREFIX": PROMPT_PREFIX,
+                "PROMPT_SUFFIX": PROMPT_SUFFIX,
+                "NUM_QUESTIONS": k,
+            },
+        )
+
+        author_id = await create_author_if_not_exists(template, MODEL)
+
+        logging.info(f"Generating questions for paragraph: {paragraph.id}")
+
+        output = llm_safe_request(prompt, MODEL, STOP)
+        logging.info(
+            f"Generated questions: {output['choices'][0]['message']['content']}"
+        )
+        new_questions = [
+            x[2:].strip()
+            for x in output["choices"][0]["message"]["content"].strip().split("\n")
+            if re.match(r"^[0-9]\.", x)
+        ]
+
+        question_objects = [
+            Question(
+                paragraph_id=paragraph.id,
+                scope="single-paragraph",
+                text=q,
+                context=context,
+                author_id=author_id,
+                timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                upvote=0,
+                downvote=0,
+                turns="single",
+            )
+            for q in new_questions
+        ]
+        return question_objects
+
+    except Exception as e:
+        logging.error(str(e))
+        logging.error(traceback.format_exc())
+        raise Exception("Error generating questions for paragraph") from e
+
+
+async def filter_questions(
+    db: AsyncSession,
+    questions: List[Question],
+) -> List[Question]:
+    updated_questions = []
+
+    async def check_question(q: Question):
+        paragraph = await db.get(Paragraph, q.paragraph_id)
+        context, fact = generate_fact_with_context(paragraph)
+        logging.info(f"Checking if answerable: {q}")
+        q_is_answerable_ic = is_answerable_guided_choice(q, fact)
+        q_is_answerable_zs = is_answerable_guided_choice(q)
+        logging.info(
+            f"Answerable in IC: {q_is_answerable_ic}, Answerable in ZS: {q_is_answerable_zs}"
+        )
+        if not q_is_answerable_ic or not q_is_answerable_zs:
+            q.rejected = True
+            q.is_answerable_ic = q_is_answerable_ic
+            q.is_answerable_zs = q_is_answerable_zs
+        q.filtered = True
+        updated_questions.append(q)
+
+    await asyncio.gather(*[check_question(q) for q in questions])
+    return updated_questions
 
 
 ###################################################################################################

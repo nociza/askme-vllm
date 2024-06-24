@@ -16,8 +16,8 @@ from fleecekmbackend.db.models import (
     Rating,
 )
 from fleecekmbackend.services.dataset.questions import (
-    generate_questions_with_retry,
-    generate_questions_single_turn,
+    generate_n_filter_questions_with_retry,
+    generate_n_filter_questions_single_turn,
 )
 from fleecekmbackend.services.dataset.answers import generate_answer
 from fleecekmbackend.services.dataset.ratings import generate_answer_rating
@@ -38,7 +38,7 @@ async def process_paragraph_e2e(
         paragraph_id = paragraph.id
         logging.info(f"Processing paragraph: {paragraph_id}")
 
-        question_ids = await generate_questions_with_retry(db, paragraph)
+        question_ids = await generate_n_filter_questions_with_retry(db, paragraph)
 
         logging.info(f"generated_questions: {question_ids}")
 
@@ -111,7 +111,7 @@ async def process_paragraph_e2e_with_retry(
 
             logging.info(f"Processing paragraph: {paragraph_id}")
 
-            question_ids = await generate_questions_single_turn(db, paragraph)
+            question_ids = await generate_n_filter_questions_single_turn(db, paragraph)
             logging.info(f"generated_questions: {question_ids}")
             generated_question_ids.extend(question_ids)
 

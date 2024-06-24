@@ -42,6 +42,11 @@ class Question(Base):
         String(63), default="multi", index=True
     )  # multi, single, or followup
 
+    filtered = Column(Boolean, default=False)
+    is_answerable_zs = Column(Boolean, default=True)
+    is_answerable_ic = Column(Boolean, default=True)
+    rejected = Column(Boolean, default=False)
+
     processed = Column(Boolean, default=False)
 
 

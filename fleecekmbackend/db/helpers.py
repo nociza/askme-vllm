@@ -156,6 +156,26 @@ async def get_next_unprocessed_paragraphs(db: AsyncSession, n: int = 1):
         return []
 
 
+async def get_next_unfiltered_questions(db: AsyncSession, n: int = 1):
+    try:
+        query = (
+            select(Question)
+            .filter(Question.filtered == False)
+            .limit(n)
+            .with_for_update(skip_locked=True)
+        )
+        result = await db.execute(query)
+        questions = result.scalars().all()
+        if not questions:
+            raise Exception("No unfiltered questions found")
+        return questions
+
+    except Exception as e:
+        await db.rollback()
+        logging.error(f"Error retrieving next unfiltered questions: {str(e)}")
+        return []
+
+
 async def get_next_unprocessed_questions(db: AsyncSession, n: int = 1):
     try:
         query = (

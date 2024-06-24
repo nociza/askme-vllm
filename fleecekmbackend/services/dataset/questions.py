@@ -1,6 +1,8 @@
 import re
 import time
 import logging
+import asyncio
+import traceback
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from fleecekmbackend.db.models import (
@@ -23,13 +25,18 @@ from fleecekmbackend.core.config import (
     PROMPT_SUFFIX,
     NUMQUESTIONS,
     MAX_ATTEMPTS,
+    LOGGING_LEVEL,
+)
+
+logging.basicConfig(
+    level=LOGGING_LEVEL, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
 
 ###################################################################################################
 #                                       Question Generation                                       #
 ###################################################################################################
-async def generate_questions(
+async def generate_questions_with_retry(
     db: AsyncSession,
     paragraph: Paragraph,
     k: int = NUMQUESTIONS,
@@ -138,8 +145,6 @@ async def generate_questions_single_turn(
     k: int = NUMQUESTIONS,
 ):
     try:
-        # process prompt template
-        time.sleep(randwait(WAIT))
         prompt_template = "{PROMPT_PREFIX}Generate {NUM_QUESTIONS} short answer questions about the facts mentioned in the following paragraph. The questions should be self-contained; meaning you avoid using references such as 'it', 'the game', 'the person', etc., but should directly include the name of the referenced item instead. Remember to include relevant context in the question. \n\nParagraph: {PARAGRAPH}\n{PROMPT_SUFFIX}"
         context, fact = generate_fact_with_context(paragraph)
         prompt, template = generate_prompts_from_template(
@@ -156,9 +161,7 @@ async def generate_questions_single_turn(
 
         logging.info(f"Generating questions for paragraph: {paragraph.id}")
 
-        # helper function to generate questions and reject unanswerable ones individually
         async def generate_and_reject_unanswerable_questions():
-            time.sleep(randwait(WAIT))
             output = llm_safe_request(prompt, MODEL, STOP)
             logging.info(
                 f"Generated questions: {output['choices'][0]['message']['content']}"
@@ -169,7 +172,9 @@ async def generate_questions_single_turn(
                 if re.match(r"^[0-9]\.", x)
             ]
             good_questions = []
-            for q in new_questions:
+            rejected_questions = []
+
+            async def check_question(q):
                 logging.info(f"Checking if answerable: {q}")
                 q_is_answerable_ic = is_answerable_guided_choice(q, fact)
                 q_is_answerable_zs = is_answerable_guided_choice(q)
@@ -179,31 +184,33 @@ async def generate_questions_single_turn(
                 if q_is_answerable_ic and q_is_answerable_zs:
                     good_questions.append(q)
                 else:
-                    rejected_question = RejectedQuestion(
-                        paragraph_id=paragraph.id,
-                        scope="single-paragraph",
-                        text=q,
-                        context=context,
-                        author_id=author_id,
-                        timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        turns="single",
-                        is_answerable_ic=q_is_answerable_ic,
-                        is_answerable_zs=q_is_answerable_zs,
+                    rejected_questions.append(
+                        RejectedQuestion(
+                            paragraph_id=paragraph.id,
+                            scope="single-paragraph",
+                            text=q,
+                            context=context,
+                            author_id=author_id,
+                            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            turns="single",
+                            is_answerable_ic=q_is_answerable_ic,
+                            is_answerable_zs=q_is_answerable_zs,
+                        )
                     )
-                    db.add(rejected_question)
-                    await db.flush()
-                    logging.info(f"Rejecting unanswerable question: {q}")
+
+            await asyncio.gather(*[check_question(q) for q in new_questions])
+
+            db.add_all(rejected_questions)
+            await db.flush()
+
             return good_questions
 
-        # main process
         good_questions = await generate_and_reject_unanswerable_questions()
 
         logging.info(f"Good Questions: {good_questions}")
 
-        question_objs = []
-        # Add questions to the database
-        for q in good_questions:
-            question = Question(
+        questions_to_add = [
+            Question(
                 paragraph_id=paragraph.id,
                 scope="single-paragraph",
                 text=q,
@@ -214,15 +221,17 @@ async def generate_questions_single_turn(
                 downvote=0,
                 turns="single",
             )
-            logging.info(f"Adding question: {question.text}")
-            db.add(question)
-            await db.flush()
-            await db.refresh(question, ["id"])
-            question_objs.append(question.id)
+            for q in good_questions
+        ]
+        db.add_all(questions_to_add)
+        await db.flush()
+        question_objs = [question.id for question in questions_to_add]
         return question_objs
+
     except Exception as e:
         logging.error(str(e))
-        raise
+        logging.error(traceback.format_exc())
+        raise "Error generating questions for paragraph" from e
 
 
 ###################################################################################################

@@ -4,6 +4,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Tuple
 
+from fleecekmbackend.core.utils.llm import randwait
 from fleecekmbackend.db.ctl import async_session
 from fleecekmbackend.db.helpers import (
     get_next_unprocessed_paragraphs,
@@ -15,14 +16,15 @@ from fleecekmbackend.db.models import (
     Rating,
 )
 from fleecekmbackend.services.dataset.questions import (
-    generate_questions,
+    generate_questions_with_retry,
     generate_questions_single_turn,
 )
 from fleecekmbackend.services.dataset.answers import generate_answer
 from fleecekmbackend.services.dataset.ratings import generate_answer_rating
+from fleecekmbackend.core.config import WAIT, LOGGING_LEVEL
 
 logging.basicConfig(
-    level=logging.WARNING, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=LOGGING_LEVEL, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
 
@@ -36,7 +38,7 @@ async def process_paragraph_e2e(
         paragraph_id = paragraph.id
         logging.info(f"Processing paragraph: {paragraph_id}")
 
-        question_ids = await generate_questions(db, paragraph)
+        question_ids = await generate_questions_with_retry(db, paragraph)
 
         logging.info(f"generated_questions: {question_ids}")
 
@@ -76,35 +78,64 @@ async def process_paragraph_e2e_with_retry(
 ) -> Tuple[List[Question], List[Answer], List[Rating]]:
     max_retries = 3
     retry_delay = 5
+    paragraph_id = paragraph.id
+
     for attempt in range(max_retries):
         try:
             generated_question_ids = []
             generated_answer_ids = []
             generated_rating_ids = []
 
-            paragraph_id = paragraph.id
             logging.info(f"Processing paragraph: {paragraph_id}")
 
             question_ids = await generate_questions_single_turn(db, paragraph)
             logging.info(f"generated_questions: {question_ids}")
             generated_question_ids.extend(question_ids)
 
-            for question_id in question_ids:
+            async def generate_answers_for_question(question_id: int):
+                answers = []
                 try:
                     for setting in ["zs", "ic"]:
-                        # Generate answers
-                        answer_id = await generate_answer(db, question_id, setting)
-                        generated_answer_ids.append(answer_id)
-                        logging.info(f"generated_answer_id: {answer_id}")
-
-                        # Generate answer ratings
-                        rating_id = await generate_answer_rating(db, answer_id)
-                        generated_rating_ids.append(rating_id)
-                        logging.info(f"generated_rating_id: {rating_id}")
+                        answer = await generate_answer(
+                            db, question_id, setting, flush=False
+                        )
+                        answers.append(answer)
                 except Exception as e:
-                    logging.error(f"Error processing question: {question_id}")
+                    logging.error(
+                        f"Error generating answers for question: {question_id}"
+                    )
                     logging.error(str(e))
                     raise
+                return answers
+
+            async def generate_ratings_for_answer(answer_id: int):
+                try:
+                    rating = await generate_answer_rating(db, answer_id, flush=False)
+                    return rating
+                except Exception as e:
+                    logging.error(f"Error generating rating for answer: {answer_id}")
+                    logging.error(str(e))
+                    raise
+
+            # Stage 1: Generate answers for all questions
+            all_answers = await asyncio.gather(
+                *[generate_answers_for_question(q_id) for q_id in question_ids]
+            )
+            all_answers_flat = [a for answers in all_answers for a in answers]
+            print(f"all_answers_flat: {all_answers_flat}")
+            db.add_all(all_answers_flat)
+            await db.flush()
+            generated_answer_ids.extend([a.id for a in all_answers_flat])
+            logging.info(f"generated_answer_ids: {generated_answer_ids}")
+
+            # Stage 2: Generate ratings for all answers
+            all_ratings = await asyncio.gather(
+                *[generate_ratings_for_answer(a_id) for a_id in generated_answer_ids]
+            )
+            db.add_all(all_ratings)
+            await db.flush()
+            generated_rating_ids.extend([r.id for r in all_ratings])
+            logging.info(f"generated_rating_ids: {generated_rating_ids}")
 
             await db.execute(
                 update(Paragraph)
@@ -169,8 +200,7 @@ async def process_all_pages_e2e():
                 logging.info("All pages processed successfully.")
             except Exception as e:
                 logging.error(f"Error occurred in process_all_pages: {str(e)}")
-                # Wait for a short duration before retrying
-                await asyncio.sleep(5)
+                await asyncio.sleep(randwait(WAIT))
 
 
 async def process_all_pages_e2e_parallel(batch_size=5):
@@ -180,7 +210,7 @@ async def process_all_pages_e2e_parallel(batch_size=5):
                 select(Paragraph.id).where(Paragraph.processed == False).limit(1)
             )
 
-            if not unprocessed_paragraph_exists:
+            if unprocessed_paragraph_exists is None:
                 logging.info(
                     "All paragraphs have been processed. Stopping the process."
                 )
@@ -205,8 +235,7 @@ async def process_all_pages_e2e_parallel(batch_size=5):
 
             except Exception as e:
                 logging.error(f"Error occurred in process_all_pages_parallel: {str(e)}")
-
-            await asyncio.sleep(5)
+                await asyncio.sleep(randwait(WAIT))
 
 
 async def start_background_process_e2e():

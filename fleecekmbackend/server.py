@@ -22,8 +22,8 @@ async def lifespan(app: FastAPI):
     async with load_csv_lock:
         try:
             with open(DATASET_PATH, "r") as file:
-                await load_csv_data(file)
-                # await load_csv_data_top_n(file, 200)
+                # await load_csv_data(file)
+                await load_csv_data_top_n(file, 100)
         except FileNotFoundError:
             logging.error("CSV file not found. Skipping data loading.")
         except Exception as e:

@@ -23,6 +23,11 @@ from fleecekmbackend.core.config import (
     PROMPT_PREFIX,
     PROMPT_SUFFIX,
     MAX_ATTEMPTS,
+    LOGGING_LEVEL,
+)
+
+logging.basicConfig(
+    level=LOGGING_LEVEL, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
 
@@ -32,6 +37,7 @@ async def generate_answer_rating(
     max_attempts: int = MAX_ATTEMPTS,
     model: str = MODEL,
     service: str = "gpublaze",
+    flush: bool = True,
 ):
     try:
         prompt_template = "{PROMPT_PREFIX}Based on this fact: \n\n `{REFERENCE}` \n\n Rate the following answer to the question - Question: `{QUESTION}` \n\n Answer: `{ANSWER}`; give a number from 0-5 where 0 is 'No answer or completely irrelevant', 1 is 'Significantly incorrect or incomplete', 2 is 'Partially correct; major inaccuracies or omissions', 3 is 'Correct but lacks depth; minimal detail', 4 is 'Mostly correct; minor errors, includes relevant details', 5 is 'Fully accurate and detailed; clear and comprehensive'. Your answer should follow the form `Answer:<number> \n Rationale:<justify your judgment in a paragraph>`. \n{PROMPT_SUFFIX}"
@@ -83,14 +89,17 @@ async def generate_answer_rating(
                 logging.info(
                     f"Generated rating: {rating.value} for answer: {answer.text} with rationale: {rating.text}"
                 )
-                db.add(rating)
-                await db.flush()
-                await db.refresh(rating, ["id"])
-                logging.debug(
-                    f"Generated rating: {rating.value} for answer: {answer.text} with rationale: {rating.text}, id: {rating.id}"
-                )
-                rating_id = rating.id
-                return rating_id
+                if flush:
+                    db.add(rating)
+                    await db.flush()
+                    await db.refresh(rating, ["id"])
+                    logging.debug(
+                        f"Generated rating: {rating.value} for answer: {answer.text} with rationale: {rating.text}, id: {rating.id}"
+                    )
+                    rating_id = rating.id
+                    return rating_id
+                else:
+                    return rating
 
         raise Exception(
             f"Cannot rate answers to the correct format after {max_attempts} attempts."

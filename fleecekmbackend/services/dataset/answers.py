@@ -21,6 +21,11 @@ from fleecekmbackend.core.config import (
     PROMPT_PREFIX,
     PROMPT_SUFFIX,
     MAX_ATTEMPTS,
+    LOGGING_LEVEL,
+)
+
+logging.basicConfig(
+    level=LOGGING_LEVEL, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
 
@@ -31,6 +36,7 @@ async def generate_answer(
     max_attempts: int = MAX_ATTEMPTS,
     model: str = MODEL,
     service: str = "gpublaze",
+    flush: bool = True,
 ):
     try:
         # process prompt template
@@ -75,10 +81,13 @@ async def generate_answer(
                     text=answer_text,
                 )
                 logging.info(f"Generated answer: {answer.text}")
-                db.add(answer)
-                await db.flush()
-                await db.refresh(answer, ["id"])
-                return answer.id
+                if flush:
+                    db.add(answer)
+                    await db.flush()
+                    await db.refresh(answer, ["id"])
+                    return answer.id
+                else:
+                    return answer
 
         raise Exception(
             f"Cannot generate a valid answer after {max_attempts} attempts. \n Question: {question.text}"

@@ -73,6 +73,29 @@ async def process_paragraph_e2e(
     return generated_question_ids, generated_answer_ids, generated_rating_ids
 
 
+async def generate_answers_for_question(db: AsyncSession, question_id: int):
+    answers = []
+    try:
+        for setting in ["zs", "ic"]:
+            answer = await generate_answer(db, question_id, setting, flush=False)
+            answers.append(answer)
+    except Exception as e:
+        logging.error(f"Error generating answers for question: {question_id}")
+        logging.error(str(e))
+        raise
+    return answers
+
+
+async def generate_ratings_for_answer(db: AsyncSession, answer_id: int):
+    try:
+        rating = await generate_answer_rating(db, answer_id, flush=False)
+        return rating
+    except Exception as e:
+        logging.error(f"Error generating rating for answer: {answer_id}")
+        logging.error(str(e))
+        raise
+
+
 async def process_paragraph_e2e_with_retry(
     db: AsyncSession, paragraph: Paragraph
 ) -> Tuple[List[Question], List[Answer], List[Rating]]:
@@ -92,34 +115,9 @@ async def process_paragraph_e2e_with_retry(
             logging.info(f"generated_questions: {question_ids}")
             generated_question_ids.extend(question_ids)
 
-            async def generate_answers_for_question(question_id: int):
-                answers = []
-                try:
-                    for setting in ["zs", "ic"]:
-                        answer = await generate_answer(
-                            db, question_id, setting, flush=False
-                        )
-                        answers.append(answer)
-                except Exception as e:
-                    logging.error(
-                        f"Error generating answers for question: {question_id}"
-                    )
-                    logging.error(str(e))
-                    raise
-                return answers
-
-            async def generate_ratings_for_answer(answer_id: int):
-                try:
-                    rating = await generate_answer_rating(db, answer_id, flush=False)
-                    return rating
-                except Exception as e:
-                    logging.error(f"Error generating rating for answer: {answer_id}")
-                    logging.error(str(e))
-                    raise
-
             # Stage 1: Generate answers for all questions
             all_answers = await asyncio.gather(
-                *[generate_answers_for_question(q_id) for q_id in question_ids]
+                *[generate_answers_for_question(db, q_id) for q_id in question_ids]
             )
             all_answers_flat = [a for answers in all_answers for a in answers]
             print(f"all_answers_flat: {all_answers_flat}")
@@ -130,7 +128,10 @@ async def process_paragraph_e2e_with_retry(
 
             # Stage 2: Generate ratings for all answers
             all_ratings = await asyncio.gather(
-                *[generate_ratings_for_answer(a_id) for a_id in generated_answer_ids]
+                *[
+                    generate_ratings_for_answer(db, a_id)
+                    for a_id in generated_answer_ids
+                ]
             )
             db.add_all(all_ratings)
             await db.flush()

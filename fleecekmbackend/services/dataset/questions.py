@@ -143,6 +143,7 @@ async def generate_questions_single_turn(
     db: AsyncSession,
     paragraph: Paragraph,
     k: int = NUMQUESTIONS,
+    flush: bool = True,
 ):
     try:
         prompt_template = "{PROMPT_PREFIX}Generate {NUM_QUESTIONS} short answer questions about the facts mentioned in the following paragraph. The questions should be self-contained; meaning you avoid using references such as 'it', 'the game', 'the person', etc., but should directly include the name of the referenced item instead. Remember to include relevant context in the question. \n\nParagraph: {PARAGRAPH}\n{PROMPT_SUFFIX}"
@@ -200,12 +201,16 @@ async def generate_questions_single_turn(
 
             await asyncio.gather(*[check_question(q) for q in new_questions])
 
-            db.add_all(rejected_questions)
-            await db.flush()
+            if flush:
+                db.add_all(rejected_questions)
+                await db.flush()
+                return good_questions, None
+            else:
+                return good_questions, rejected_questions
 
-            return good_questions
-
-        good_questions = await generate_and_reject_unanswerable_questions()
+        good_questions, rejected_questions = (
+            await generate_and_reject_unanswerable_questions()
+        )
 
         logging.info(f"Good Questions: {good_questions}")
 
@@ -223,10 +228,13 @@ async def generate_questions_single_turn(
             )
             for q in good_questions
         ]
-        db.add_all(questions_to_add)
-        await db.flush()
-        question_objs = [question.id for question in questions_to_add]
-        return question_objs
+        if flush:
+            db.add_all(questions_to_add)
+            await db.flush()
+            question_objs = [question.id for question in questions_to_add]
+            return question_objs
+        else:
+            return questions_to_add, rejected_questions
 
     except Exception as e:
         logging.error(str(e))

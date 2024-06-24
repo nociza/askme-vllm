@@ -265,10 +265,10 @@ async def generate_questions_single_turn(
 
         author_id = await create_author_if_not_exists(template, MODEL)
 
-        logging.info(f"Generating questions for paragraph: {paragraph.id}")
+        logging.debug(f"Generating questions for paragraph: {paragraph.id}")
 
         output = llm_safe_request(prompt, MODEL, STOP)
-        logging.info(
+        logging.debug(
             f"Generated questions: {output['choices'][0]['message']['content']}"
         )
         new_questions = [
@@ -316,10 +316,10 @@ async def filter_questions(
         context, fact = generate_fact_with_context(paragraph)
 
         for q in questions:
-            logging.info(f"Checking if answerable: {q}")
+            logging.debug(f"Checking if answerable: {q}")
             q_is_answerable_ic = is_answerable_guided_choice(q, fact)
             q_is_answerable_zs = is_answerable_guided_choice(q)
-            logging.info(
+            logging.debug(
                 f"Answerable in IC: {q_is_answerable_ic}, Answerable in ZS: {q_is_answerable_zs}"
             )
             if not q_is_answerable_ic or not q_is_answerable_zs:

@@ -3,6 +3,8 @@ import logging
 import time
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
+from collections import deque
+from contextlib import asynccontextmanager
 
 from fleecekmbackend.db.ctl import async_session
 from fleecekmbackend.db.helpers import (
@@ -159,9 +161,84 @@ async def process_all_paragraphs_s2s(batch_size=5):
     return times
 
 
+async def process_all_paragraphs_s2s_optimized(batch_size=5):
+    async def producer(queue, get_items_func, process_func):
+        while True:
+            async with async_session() as db:
+                items = await get_items_func(db, batch_size)
+                if not items:
+                    break
+                for item in items:
+                    await queue.put(item)
+            await asyncio.sleep(0)  # Allow other coroutines to run
+
+    async def consumer(queue, process_func, commit_func):
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+            result = await process_func(item)
+            await commit_func(result)
+            queue.task_done()
+
+    @asynccontextmanager
+    async def stage_context(name):
+        start_time = time.time()
+        logging.info(f"Starting {name}")
+        try:
+            yield
+        finally:
+            end_time = time.time()
+            logging.info(f"{name} completed in {end_time - start_time:.2f} seconds")
+
+    async def run_stage(name, get_items_func, process_func, num_consumers=3):
+        queue = asyncio.Queue(maxsize=batch_size * 2)
+
+        async def commit_results(db, results):
+            db.add_all(results)
+            await db.flush()
+            await db.commit()
+
+        async with stage_context(name):
+            producer_task = asyncio.create_task(
+                producer(queue, get_items_func, process_func)
+            )
+            consumer_tasks = [
+                asyncio.create_task(
+                    consumer(
+                        queue,
+                        process_func,
+                        lambda result: commit_results(async_session(), result),
+                    )
+                )
+                for _ in range(num_consumers)
+            ]
+
+            await producer_task
+            for _ in range(num_consumers):
+                await queue.put(None)
+            await asyncio.gather(*consumer_tasks)
+
+    stages = [
+        (
+            "Generate Questions",
+            get_next_unprocessed_paragraphs,
+            generate_questions_stage,
+        ),
+        ("Filter Questions", get_next_unfiltered_questions, filter_questions_stage),
+        ("Generate Answers", get_next_unprocessed_questions, generate_answers_stage),
+        ("Generate Ratings", get_next_unprocessed_answers, generate_ratings_stage),
+    ]
+
+    for name, get_items_func, process_func in stages:
+        await run_stage(name, get_items_func, process_func)
+
+    logging.info("All stages completed")
+
+
 async def start_background_process_s2s(batch_size=64):
     try:
-        await process_all_paragraphs_s2s(batch_size)
+        await process_all_paragraphs_s2s_optimized(batch_size)
     except Exception as e:
         logging.error("Error in background process:")
         logging.error(str(e))

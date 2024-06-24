@@ -305,23 +305,36 @@ async def filter_questions(
 ) -> List[Question]:
     updated_questions = []
 
-    async def check_question(q: Question):
-        paragraph = await db.get(Paragraph, q.paragraph_id)
-        context, fact = generate_fact_with_context(paragraph)
-        logging.info(f"Checking if answerable: {q}")
-        q_is_answerable_ic = is_answerable_guided_choice(q, fact)
-        q_is_answerable_zs = is_answerable_guided_choice(q)
-        logging.info(
-            f"Answerable in IC: {q_is_answerable_ic}, Answerable in ZS: {q_is_answerable_zs}"
-        )
-        if not q_is_answerable_ic or not q_is_answerable_zs:
-            q.rejected = True
-            q.is_answerable_ic = q_is_answerable_ic
-            q.is_answerable_zs = q_is_answerable_zs
-        q.filtered = True
-        updated_questions.append(q)
+    questions_by_paragraph = {}
+    for q in questions:
+        if q.paragraph_id not in questions_by_paragraph:
+            questions_by_paragraph[q.paragraph_id] = []
+        questions_by_paragraph[q.paragraph_id].append(q)
 
-    await asyncio.gather(*[check_question(q) for q in questions])
+    async def check_questions_for_paragraph(paragraph_id, questions):
+        paragraph = await db.get(Paragraph, paragraph_id)
+        context, fact = generate_fact_with_context(paragraph)
+
+        for q in questions:
+            logging.info(f"Checking if answerable: {q}")
+            q_is_answerable_ic = is_answerable_guided_choice(q, fact)
+            q_is_answerable_zs = is_answerable_guided_choice(q)
+            logging.info(
+                f"Answerable in IC: {q_is_answerable_ic}, Answerable in ZS: {q_is_answerable_zs}"
+            )
+            if not q_is_answerable_ic or not q_is_answerable_zs:
+                q.rejected = True
+                q.is_answerable_ic = q_is_answerable_ic
+                q.is_answerable_zs = q_is_answerable_zs
+            q.filtered = True
+            updated_questions.append(q)
+
+    await asyncio.gather(
+        *[
+            check_questions_for_paragraph(paragraph_id, qs)
+            for paragraph_id, qs in questions_by_paragraph.items()
+        ]
+    )
     return updated_questions
 
 

@@ -1,7 +1,9 @@
+import asyncio
 import random
 from fleecekmbackend.db.ctl import async_session, engine
 from fleecekmbackend.db.models import Paragraph, Author, Question, Answer
 from sqlalchemy import func, select, text, update
+from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 import pandas as pd
 import logging
@@ -240,16 +242,37 @@ async def get_page_raw(db: AsyncSession, index: int = -1):
     return samples
 
 
-async def create_author_if_not_exists(prompt: str, model: str):
-    async with async_session() as db:
-        result = await db.execute(
-            select(Author).filter(Author.model == model, Author.prompt == prompt)
+async def create_author_if_not_exists(
+    prompt: str, model: str, max_retries: int = 3, initial_delay: float = 1.0
+):
+    async def attempt_create_author(db: AsyncSession):
+        insert_stmt = insert(Author).values(model=model, prompt=prompt)
+        do_update_stmt = insert_stmt.on_duplicate_key_update(
+            model=insert_stmt.inserted.model, prompt=insert_stmt.inserted.prompt
         )
-        author = result.scalar()
-        if author is None:
-            author = Author(model=model, prompt=prompt)
-            db.add(author)
+        try:
+            result = await db.execute(do_update_stmt)
             await db.commit()
-            await db.refresh(author, ["id"])
-        author_id = author.id
-        return author_id
+            author_id = result.inserted_primary_key[0]
+            return author_id
+        except Exception as e:
+            logging.error(f"Database error in create_author_if_not_exists: {str(e)}")
+            await db.rollback()
+            raise
+
+    delay = initial_delay
+    for attempt in range(max_retries):
+        try:
+            async with async_session() as db:
+                return await attempt_create_author(db)
+        except Exception as e:
+            if attempt == max_retries - 1:
+                logging.error(f"Failed to create author after {max_retries} attempts.")
+                raise
+            logging.warning(
+                f"Attempt {attempt + 1} failed: {e}. Retrying in {delay} seconds..."
+            )
+            await asyncio.sleep(delay)
+            delay *= 2  # Exponential backoff
+
+    raise Exception("Unexpected error: All retries failed but no exception was raised.")

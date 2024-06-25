@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, Enum
+from sqlalchemy import Column, Integer, String, Text, Boolean, Enum, UniqueConstraint
 from fleecekmbackend.db.ctl import Base
 
 
@@ -25,6 +25,8 @@ class Author(Base):
     model = Column(String(1023))  # can be human
     prompt = Column(Text, nullable=True)
     username = Column(String(1023), nullable=True)
+
+    __table_args__ = (UniqueConstraint("model", "prompt", name="_model_prompt_uc"),)
 
 
 class Question(Base):

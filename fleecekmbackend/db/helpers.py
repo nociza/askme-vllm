@@ -1,5 +1,7 @@
 import asyncio
 import random
+
+from aiomysql import IntegrityError
 from fleecekmbackend.db.ctl import async_session, engine
 from fleecekmbackend.db.models import Paragraph, Author, Question, Answer
 from sqlalchemy import func, select, text, update
@@ -246,19 +248,36 @@ async def create_author_if_not_exists(
     prompt: str, model: str, max_retries: int = 3, initial_delay: float = 1.0
 ):
     async def attempt_create_author(db: AsyncSession):
-        insert_stmt = insert(Author).values(model=model, prompt=prompt)
-        do_update_stmt = insert_stmt.on_duplicate_key_update(
-            model=insert_stmt.inserted.model, prompt=insert_stmt.inserted.prompt
-        )
-        try:
-            result = await db.execute(do_update_stmt)
-            await db.commit()
-            author_id = result.inserted_primary_key[0]
-            return author_id
-        except Exception as e:
-            logging.error(f"Database error in create_author_if_not_exists: {str(e)}")
-            await db.rollback()
-            raise
+        # Check if the author already exists
+        async with db.begin():
+            result = await db.execute(
+                select(Author)
+                .where(Author.model == model, Author.prompt == prompt)
+                .with_for_update()
+            )
+            existing_author = result.scalars().first()
+
+            if existing_author:
+                return existing_author.id
+
+            # If the author does not exist, insert a new one
+            insert_stmt = insert(Author).values(model=model, prompt=prompt)
+            try:
+                result = await db.execute(insert_stmt)
+                await db.commit()
+                author_id = result.inserted_primary_key[0]
+                return author_id
+            except IntegrityError:
+                # Handle race condition where another transaction might have inserted the same record
+                await db.rollback()
+                result = await db.execute(
+                    select(Author).where(Author.model == model, Author.prompt == prompt)
+                )
+                existing_author = result.scalars().first()
+                if existing_author:
+                    return existing_author.id
+                else:
+                    raise
 
     delay = initial_delay
     for attempt in range(max_retries):

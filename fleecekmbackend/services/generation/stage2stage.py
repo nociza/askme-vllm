@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import time
-import tqdm.asyncio as tqdm_asyncio
+from tqdm.asyncio import tqdm_asyncio
 from tqdm import tqdm
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
@@ -278,9 +278,9 @@ async def main():
     await create_tables_if_not_exist()
 
     with open(DATASET_PATH, "r") as file:
-        await load_csv_data_rand_n(file, 1000, overwrite=True)
+        await load_csv_data_rand_n(file, 10_000, overwrite=True)
 
-    await start_background_process_s2s(64)
+    await start_background_process_s2s(1024)
 
 
 if __name__ == "__main__":

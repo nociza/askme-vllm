@@ -1,6 +1,6 @@
 import logging
 
-DATABASE_URL = "mysql+aiomysql://root:fleecekm@localhost:13306/benchmark"
+DATABASE_URL = "mysql+aiomysql://root:fleecekm@localhost:13306/askme10k"
 DATASET_PATH = "data/wiki_text_cleaned_v1.csv"
 WAIT = 0.1
 MODEL = "meta-llama/Meta-Llama-3-70B-Instruct"

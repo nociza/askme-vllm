@@ -1,5 +1,6 @@
 import asyncio
 import random
+import hashlib
 
 from aiomysql import IntegrityError
 from fleecekmbackend.db.ctl import async_session, engine
@@ -243,7 +244,7 @@ async def get_next_unprocessed_paragraphs(db: AsyncSession, n: int = 1):
 
 
 async def get_unprocessed_paragraphs_count():
-    with async_session() as db:
+    async with async_session() as db:
         try:
             query = select(func.count(Paragraph.id)).where(Paragraph.processed == False)
             result = await db.execute(query)
@@ -276,7 +277,7 @@ async def get_next_unfiltered_questions(db: AsyncSession, n: int = 1):
 
 
 async def get_unfiltered_questions_count():
-    with async_session() as db:
+    async with async_session() as db:
         try:
             query = select(func.count(Question.id)).where(Question.filtered == False)
             result = await db.execute(query)
@@ -309,7 +310,7 @@ async def get_next_unprocessed_questions(db: AsyncSession, n: int = 1):
 
 
 async def get_unprocessed_questions_count():
-    with async_session() as db:
+    async with async_session() as db:
         try:
             query = select(func.count(Question.id)).where(Question.processed == False)
             result = await db.execute(query)
@@ -342,7 +343,7 @@ async def get_next_unprocessed_answers(db: AsyncSession, n: int = 1):
 
 
 async def get_unprocessed_answers_count():
-    with async_session() as db:
+    async with async_session() as db:
         try:
             query = select(func.count(Answer.id)).where(Answer.processed == False)
             result = await db.execute(query)
@@ -378,16 +379,20 @@ async def get_page_raw(db: AsyncSession, index: int = -1):
     return samples
 
 
+def generate_hash(model: str, prompt: str) -> str:
+    return hashlib.sha256(f"{model}:{prompt}".encode("utf-8")).hexdigest()
+
+
 async def create_author_if_not_exists(
     prompt: str, model: str, max_retries: int = 3, initial_delay: float = 1.0
 ):
+    hash_value = generate_hash(model, prompt)
+
     async def attempt_create_author(db: AsyncSession):
         # Check if the author already exists
         async with db.begin():
             result = await db.execute(
-                select(Author)
-                .where(Author.model == model, Author.prompt == prompt)
-                .with_for_update()
+                select(Author).where(Author.hash == hash_value).with_for_update()
             )
             existing_author = result.scalars().first()
 
@@ -395,7 +400,9 @@ async def create_author_if_not_exists(
                 return existing_author.id
 
             # If the author does not exist, insert a new one
-            insert_stmt = insert(Author).values(model=model, prompt=prompt)
+            insert_stmt = insert(Author).values(
+                model=model, prompt=prompt, hash=hash_value
+            )
             try:
                 result = await db.execute(insert_stmt)
                 await db.commit()
@@ -405,7 +412,7 @@ async def create_author_if_not_exists(
                 # Handle race condition where another transaction might have inserted the same record
                 await db.rollback()
                 result = await db.execute(
-                    select(Author).where(Author.model == model, Author.prompt == prompt)
+                    select(Author).where(Author.hash == hash_value)
                 )
                 existing_author = result.scalars().first()
                 if existing_author:

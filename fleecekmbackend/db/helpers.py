@@ -12,6 +12,61 @@ import logging
 from tqdm import tqdm
 
 
+async def load_csv_data_rand_n(file, n, overwrite=False):
+    async with async_session() as db:
+        try:
+            async with engine.connect() as conn:
+                table_exists = await conn.run_sync(
+                    lambda sync_conn: sync_conn.dialect.has_table(
+                        sync_conn, Paragraph.__tablename__
+                    )
+                )
+
+                if overwrite and table_exists:
+                    await conn.execute(Paragraph.__table__.delete())
+                    logging.info("Existing entries in the database have been removed.")
+                elif table_exists and not overwrite:
+                    result = await conn.execute(
+                        select(func.count()).select_from(Paragraph.__table__)
+                    )
+                    count = result.scalar()
+                    if count and count > 0:
+                        logging.info(
+                            f"Dataset already contains {count} entries. Use overwrite=True to replace existing data."
+                        )
+                        return
+
+            df = pd.read_csv(file)
+            df["within_page_order"] = df.groupby("page_name").cumcount()
+            df = df.where(pd.notnull(df), None)
+
+            # Sort by length of 'text' column in reverse order
+            df["text_length"] = df["text"].str.len()
+            df = df.sort_values("text_length", ascending=False).drop(
+                "text_length", axis=1
+            )
+
+            if len(df) > n:
+                df = df.sample(n=n)
+
+            if not table_exists:
+                async with engine.begin() as conn:
+                    await conn.run_sync(Paragraph.__table__.create)
+
+            async with engine.begin() as conn:
+                await conn.execute(text("SET SESSION sql_mode='NO_AUTO_VALUE_ON_ZERO'"))
+
+                for _, row in tqdm(df.iterrows(), total=len(df), desc="Inserting data"):
+                    await conn.execute(
+                        Paragraph.__table__.insert().values(row.to_dict())
+                    )
+        except Exception as e:
+            logging.error(f"Error loading CSV data: {str(e)}")
+            await db.rollback()
+        finally:
+            logging.info("Data loading completed.")
+
+
 async def load_csv_data_top_n(file, n):
     async with async_session() as db:
         try:
@@ -160,6 +215,19 @@ async def get_next_unprocessed_paragraphs(db: AsyncSession, n: int = 1):
         return []
 
 
+async def get_unprocessed_paragraphs_count():
+    with async_session() as db:
+        try:
+            query = select(func.count(Paragraph.id)).where(Paragraph.processed == False)
+            result = await db.execute(query)
+            count = result.scalar()
+            return count
+        except Exception as e:
+            await db.rollback()
+            logging.error(f"Error retrieving unprocessed paragraphs count: {str(e)}")
+            return -1
+
+
 async def get_next_unfiltered_questions(db: AsyncSession, n: int = 1):
     try:
         query = (
@@ -178,6 +246,19 @@ async def get_next_unfiltered_questions(db: AsyncSession, n: int = 1):
         await db.rollback()
         logging.error(f"Error retrieving next unfiltered questions: {str(e)}")
         return []
+
+
+async def get_unfiltered_questions_count():
+    with async_session() as db:
+        try:
+            query = select(func.count(Question.id)).where(Question.filtered == False)
+            result = await db.execute(query)
+            count = result.scalar()
+            return count
+        except Exception as e:
+            await db.rollback()
+            logging.error(f"Error retrieving unfiltered questions count: {str(e)}")
+            return -1
 
 
 async def get_next_unprocessed_questions(db: AsyncSession, n: int = 1):
@@ -200,6 +281,19 @@ async def get_next_unprocessed_questions(db: AsyncSession, n: int = 1):
         return []
 
 
+async def get_unprocessed_questions_count():
+    with async_session() as db:
+        try:
+            query = select(func.count(Question.id)).where(Question.processed == False)
+            result = await db.execute(query)
+            count = result.scalar()
+            return count
+        except Exception as e:
+            await db.rollback()
+            logging.error(f"Error retrieving unprocessed questions count: {str(e)}")
+            return -1
+
+
 async def get_next_unprocessed_answers(db: AsyncSession, n: int = 1):
     try:
         query = (
@@ -218,6 +312,19 @@ async def get_next_unprocessed_answers(db: AsyncSession, n: int = 1):
         await db.rollback()
         logging.error(f"Error retrieving next unprocessed answers: {str(e)}")
         return []
+
+
+async def get_unprocessed_answers_count():
+    with async_session() as db:
+        try:
+            query = select(func.count(Answer.id)).where(Answer.processed == False)
+            result = await db.execute(query)
+            count = result.scalar()
+            return count
+        except Exception as e:
+            await db.rollback()
+            logging.error(f"Error retrieving unprocessed answers count: {str(e)}")
+            return -1
 
 
 async def get_page_raw(db: AsyncSession, index: int = -1):

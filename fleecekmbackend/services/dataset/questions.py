@@ -162,11 +162,11 @@ async def generate_n_filter_questions_single_turn(
 
         author_id = await create_author_if_not_exists(template, MODEL)
 
-        logging.info(f"Generating questions for paragraph: {paragraph.id}")
+        logging.debug(f"Generating questions for paragraph: {paragraph.id}")
 
         async def generate_and_reject_unanswerable_questions():
             output = llm_safe_request(prompt, MODEL, STOP)
-            logging.info(
+            logging.debug(
                 f"Generated questions: {output['choices'][0]['message']['content']}"
             )
             new_questions = [
@@ -178,10 +178,10 @@ async def generate_n_filter_questions_single_turn(
             rejected_questions = []
 
             async def check_question(q):
-                logging.info(f"Checking if answerable: {q}")
+                logging.debug(f"Checking if answerable: {q}")
                 q_is_answerable_ic = await is_answerable_guided_choice(q, fact)
                 q_is_answerable_zs = await is_answerable_guided_choice(q)
-                logging.info(
+                logging.debug(
                     f"Answerable in IC: {q_is_answerable_ic}, Answerable in ZS: {q_is_answerable_zs}"
                 )
                 if q_is_answerable_ic and q_is_answerable_zs:
@@ -214,7 +214,7 @@ async def generate_n_filter_questions_single_turn(
             await generate_and_reject_unanswerable_questions()
         )
 
-        logging.info(f"Good Questions: {good_questions}")
+        logging.debug(f"Good Questions: {good_questions}")
 
         questions_to_add = [
             Question(

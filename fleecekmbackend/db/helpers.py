@@ -4,7 +4,7 @@ import random
 from aiomysql import IntegrityError
 from fleecekmbackend.db.ctl import async_session, engine
 from fleecekmbackend.db.models import Paragraph, Author, Question, Answer
-from sqlalchemy import func, select, text, update
+from sqlalchemy import Column, Integer, func, select, text, update
 from sqlalchemy.dialects.mysql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 import pandas as pd
@@ -23,7 +23,9 @@ async def load_csv_data_rand_n(file, n, overwrite=False):
                 )
 
                 if overwrite and table_exists:
-                    await conn.execute(Paragraph.__table__.delete())
+                    await conn.execute(
+                        text(f"TRUNCATE TABLE {Paragraph.__tablename__}")
+                    )
                     logging.info("Existing entries in the database have been removed.")
                 elif table_exists and not overwrite:
                     result = await conn.execute(
@@ -40,22 +42,46 @@ async def load_csv_data_rand_n(file, n, overwrite=False):
             df["within_page_order"] = df.groupby("page_name").cumcount()
             df = df.where(pd.notnull(df), None)
 
+            # Rename 'id' to 'original_entry_id'
+            df = df.rename(columns={"id": "original_entry_id"})
+
             # Sort by length of 'text' column in reverse order
             df["text_length"] = df["text"].str.len()
             df = df.sort_values("text_length", ascending=False).drop(
                 "text_length", axis=1
             )
 
+            # Randomly select N entries
             if len(df) > n:
                 df = df.sample(n=n)
 
             if not table_exists:
+                # Modify the Paragraph model to include original_entry_id
+                if not hasattr(Paragraph, "original_entry_id"):
+                    Paragraph.original_entry_id = Column(Integer)
+
                 async with engine.begin() as conn:
                     await conn.run_sync(Paragraph.__table__.create)
+            else:
+                # Check if original_entry_id column exists, if not, add it
+                async with engine.begin() as conn:
+                    result = await conn.execute(
+                        text(
+                            f"SELECT COUNT(*) FROM information_schema.COLUMNS "
+                            f"WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{Paragraph.__tablename__}' "
+                            f"AND COLUMN_NAME = 'original_entry_id'"
+                        )
+                    )
+                    column_exists = result.scalar() > 0
+
+                    if not column_exists:
+                        await conn.execute(
+                            text(
+                                f"ALTER TABLE {Paragraph.__tablename__} ADD COLUMN original_entry_id INTEGER"
+                            )
+                        )
 
             async with engine.begin() as conn:
-                await conn.execute(text("SET SESSION sql_mode='NO_AUTO_VALUE_ON_ZERO'"))
-
                 for _, row in tqdm(df.iterrows(), total=len(df), desc="Inserting data"):
                     await conn.execute(
                         Paragraph.__table__.insert().values(row.to_dict())
@@ -63,6 +89,7 @@ async def load_csv_data_rand_n(file, n, overwrite=False):
         except Exception as e:
             logging.error(f"Error loading CSV data: {str(e)}")
             await db.rollback()
+            raise  # Re-raise the exception for further debugging if needed
         finally:
             logging.info("Data loading completed.")
 

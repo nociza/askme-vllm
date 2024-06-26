@@ -17,6 +17,7 @@ class Paragraph(Base):
     within_page_order = Column(Integer)
 
     processed = Column(Boolean, default=False)
+    original_entry_id = Column(Integer, nullable=True)
 
 
 class Author(Base):

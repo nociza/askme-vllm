@@ -176,6 +176,91 @@ async def load_csv_data(file):
             logging.info("Data loading completed.")
 
 
+async def load_csv_data_all(file, overwrite=False):
+    async with async_session() as db:
+        try:
+            async with engine.connect() as conn:
+                table_exists = await conn.run_sync(
+                    lambda sync_conn: sync_conn.dialect.has_table(
+                        sync_conn, Paragraph.__tablename__
+                    )
+                )
+
+                if overwrite and table_exists:
+                    await conn.execute(
+                        text(f"TRUNCATE TABLE {Paragraph.__tablename__}")
+                    )
+                    logging.info("Existing entries in the database have been removed.")
+                elif table_exists and not overwrite:
+                    result = await conn.execute(
+                        select(func.count()).select_from(Paragraph.__table__)
+                    )
+                    count = result.scalar()
+                    if count and count > 0:
+                        logging.info(
+                            f"Dataset already contains {count} entries. Use overwrite=True to replace existing data."
+                        )
+                        return
+
+            df = pd.read_csv(file)
+            df["within_page_order"] = df.groupby("page_name").cumcount()
+            df = df.where(pd.notnull(df), None)
+
+            # Rename 'id' to 'original_entry_id'
+            df = df.rename(columns={"id": "original_entry_id"})
+
+            # Sort by length of 'text' column in reverse order
+            df["text_length"] = df["text"].str.len()
+            df = df.sort_values("text_length", ascending=False).drop(
+                "text_length", axis=1
+            )
+
+            if not table_exists:
+                # Modify the Paragraph model to include original_entry_id
+                if not hasattr(Paragraph, "original_entry_id"):
+                    Paragraph.original_entry_id = Column(Integer)
+
+                async with engine.begin() as conn:
+                    await conn.run_sync(Paragraph.__table__.create)
+            else:
+                # Check if original_entry_id column exists, if not, add it
+                async with engine.begin() as conn:
+                    result = await conn.execute(
+                        text(
+                            f"SELECT COUNT(*) FROM information_schema.COLUMNS "
+                            f"WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{Paragraph.__tablename__}' "
+                            f"AND COLUMN_NAME = 'original_entry_id'"
+                        )
+                    )
+                    column_exists = result.scalar() > 0
+
+                    if not column_exists:
+                        await conn.execute(
+                            text(
+                                f"ALTER TABLE {Paragraph.__tablename__} ADD COLUMN original_entry_id INTEGER"
+                            )
+                        )
+
+            # Insert data in chunks for better performance
+            chunk_size = 1000  # Adjust this value based on your system's capabilities
+            async with engine.begin() as conn:
+                for start in tqdm(range(0, len(df), chunk_size), desc="Inserting data"):
+                    chunk = df.iloc[start : start + chunk_size]
+                    await conn.execute(
+                        Paragraph.__table__.insert(),
+                        [row.to_dict() for _, row in chunk.iterrows()],
+                    )
+
+            logging.info(f"Successfully loaded {len(df)} entries into the database.")
+
+        except Exception as e:
+            logging.error(f"Error loading CSV data: {str(e)}")
+            await db.rollback()
+            raise  # Re-raise the exception for further debugging if needed
+        finally:
+            logging.info("Data loading completed.")
+
+
 async def get_random_samples_raw(n: int, db: AsyncSession):
     query = select(Paragraph).order_by(func.random()).limit(n)
     result = await db.execute(query)

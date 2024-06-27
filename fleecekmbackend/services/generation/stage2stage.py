@@ -18,6 +18,7 @@ from fleecekmbackend.db.helpers import (
     get_unprocessed_answers_count,
     get_unprocessed_paragraphs_count,
     get_unprocessed_questions_count,
+    load_csv_data_all,
     load_csv_data_rand_n,
     load_csv_data_top_n,
 )
@@ -278,9 +279,9 @@ async def main():
     await create_tables_if_not_exist()
 
     with open(DATASET_PATH, "r") as file:
-        await load_csv_data_rand_n(file, 10_000, overwrite=True)
+        await load_csv_data_all(file)
 
-    await start_background_process_s2s(1024)
+    await start_background_process_s2s(128)
 
 
 if __name__ == "__main__":

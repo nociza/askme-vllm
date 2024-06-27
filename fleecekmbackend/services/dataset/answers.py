@@ -10,6 +10,7 @@ from fleecekmbackend.db.models import (
 from fleecekmbackend.db.helpers import create_author_if_not_exists
 from fleecekmbackend.core.utils.llm import (
     llm_safe_request,
+    llm_safe_request_async,
     randwait,
     generate_prompts_from_template,
 )
@@ -69,7 +70,7 @@ async def generate_answer(
         while attempts < max_attempts:
             attempts += 1
             time.sleep(randwait(WAIT))
-            output = llm_safe_request(prompt, model, STOP, service=service)
+            output = await llm_safe_request_async(prompt, model, STOP, service=service)
             answer_text = output["choices"][0]["message"]["content"].strip()
 
             if answer_text:
@@ -80,7 +81,7 @@ async def generate_answer(
                     timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     text=answer_text,
                 )
-                logging.info(f"Generated answer: {answer.text}")
+                logging.debug(f"Generated answer: {answer.text}")
                 if flush:
                     db.add(answer)
                     await db.flush()

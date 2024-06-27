@@ -112,7 +112,7 @@ async def process_paragraph_e2e_with_retry(
             logging.info(f"Processing paragraph: {paragraph_id}")
 
             question_ids = await generate_n_filter_questions_single_turn(db, paragraph)
-            logging.info(f"generated_questions: {question_ids}")
+            logging.debug(f"generated_questions: {question_ids}")
             generated_question_ids.extend(question_ids)
 
             # Stage 1: Generate answers for all questions
@@ -120,11 +120,10 @@ async def process_paragraph_e2e_with_retry(
                 *[generate_answers_for_question(db, q_id) for q_id in question_ids]
             )
             all_answers_flat = [a for answers in all_answers for a in answers]
-            print(f"all_answers_flat: {all_answers_flat}")
             db.add_all(all_answers_flat)
             await db.flush()
             generated_answer_ids.extend([a.id for a in all_answers_flat])
-            logging.info(f"generated_answer_ids: {generated_answer_ids}")
+            logging.debug(f"generated_answer_ids: {generated_answer_ids}")
 
             # Stage 2: Generate ratings for all answers
             all_ratings = await asyncio.gather(
@@ -136,7 +135,7 @@ async def process_paragraph_e2e_with_retry(
             db.add_all(all_ratings)
             await db.flush()
             generated_rating_ids.extend([r.id for r in all_ratings])
-            logging.info(f"generated_rating_ids: {generated_rating_ids}")
+            logging.debug(f"generated_rating_ids: {generated_rating_ids}")
 
             await db.execute(
                 update(Paragraph)

@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import random
+import aiohttp
 import requests
 import time
 import together
@@ -276,6 +278,125 @@ def together_safe_request(
             max_retries - 1,
             prompt_prefix,
             prompt_suffix,
+        )
+
+
+async def llm_safe_request_async(
+    prompt,
+    model,
+    stop,
+    max_tokens=MAX_TOKEN,
+    temperature=TEMPERATURE,
+    top_p=TOP_P,
+    top_k=TOP_K,
+    repetition_penalty=REPETITION_PENALTY,
+    max_retries=MAX_RETRIES,
+    prompt_prefix="",
+    prompt_suffix="",
+    guided_choice=[],
+    service="gpublaze",
+):
+    if service == "gpublaze":
+        return await gpublaze_safe_request_async(
+            prompt,
+            model,
+            stop,
+            max_tokens,
+            temperature,
+            top_p,
+            top_k,
+            repetition_penalty,
+            max_retries,
+            prompt_prefix,
+            prompt_suffix,
+            guided_choice,
+        )
+    else:
+        raise Exception(f"Service {service} not supported")
+
+
+async def gpublaze_safe_request_async(
+    prompt,
+    model,
+    stop,
+    max_tokens=MAX_TOKEN,
+    temperature=TEMPERATURE,
+    top_p=TOP_P,
+    top_k=TOP_K,
+    repetition_penalty=REPETITION_PENALTY,
+    max_retries=MAX_RETRIES,
+    prompt_prefix="",
+    prompt_suffix="",
+    guided_choice=[],
+):
+    try:
+        if prompt_prefix:
+            prompt = prompt_prefix + " " + prompt
+        if prompt_suffix:
+            prompt = prompt + " " + prompt_suffix
+
+        async with aiohttp.ClientSession() as session:
+            if guided_choice:
+                async with session.post(
+                    "http://gpublaze.ist.berkeley.edu:54321/v1/chat/completions",
+                    headers={"Content-Type": "application/json"},
+                    json={
+                        "model": model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "max_tokens": max_tokens,
+                        "temperature": temperature,
+                        "top_p": top_p,
+                        "top_k": top_k,
+                        "repetition_penalty": repetition_penalty,
+                        "stop": stop,
+                        "stream": False,
+                        "safe_prompt": False,
+                        "guided_choice": guided_choice,
+                    },
+                ) as res:
+                    res.raise_for_status()
+                    return await res.json()
+            else:
+                async with session.post(
+                    "http://gpublaze.ist.berkeley.edu:54321/v1/chat/completions",
+                    headers={"Content-Type": "application/json"},
+                    json={
+                        "model": model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "max_tokens": max_tokens,
+                        "temperature": temperature,
+                        "top_p": top_p,
+                        "top_k": top_k,
+                        "repetition_penalty": repetition_penalty,
+                        "stop": stop,
+                        "stream": False,
+                        "safe_prompt": False,
+                    },
+                ) as res:
+                    res.raise_for_status()
+                    return await res.json()
+    except aiohttp.ClientResponseError as e:
+        logging.error(f"Error: {e}")
+        if max_retries <= 0:
+            raise Exception(
+                f"Cannot get the response after max_attempts. \n Prompt: {prompt} \n response: {res.json()}"
+            )
+        await asyncio.sleep(
+            random.uniform(1, WAIT)
+        )  # Replacing time.sleep with asyncio.sleep
+        return await gpublaze_safe_request_async(
+            prompt,
+            model,
+            stop,
+            max_tokens,
+            temperature,
+            top_p,
+            top_k,
+            repetition_penalty,
+            max_retries - 1,
+            prompt_prefix,
+            prompt_suffix,
+            guided_choice,
         )
 
 

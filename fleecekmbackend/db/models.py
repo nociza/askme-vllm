@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, Enum
+from sqlalchemy import Column, Integer, String, Text, Boolean, Enum, UniqueConstraint
 from fleecekmbackend.db.ctl import Base
+import hashlib
 
 
 class Paragraph(Base):
@@ -17,6 +18,7 @@ class Paragraph(Base):
     within_page_order = Column(Integer)
 
     processed = Column(Boolean, default=False)
+    original_entry_id = Column(Integer, nullable=True)
 
 
 class Author(Base):
@@ -25,6 +27,15 @@ class Author(Base):
     model = Column(String(1023))  # can be human
     prompt = Column(Text, nullable=True)
     username = Column(String(1023), nullable=True)
+    hash = Column(String(64), unique=True)
+
+    @staticmethod
+    def generate_hash(model, prompt):
+        return hashlib.sha256(f"{model}:{prompt}".encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def before_insert_listener(mapper, connection, target):
+        target.hash = Author.generate_hash(target.model, target.prompt)
 
 
 class Question(Base):

@@ -12,6 +12,7 @@ from fleecekmbackend.db.models import (
 from fleecekmbackend.db.helpers import create_author_if_not_exists
 from fleecekmbackend.core.utils.llm import (
     llm_safe_request,
+    llm_safe_request_async,
     randwait,
     generate_prompts_from_template,
 )
@@ -68,7 +69,7 @@ async def generate_answer_rating(
         while attempts < max_attempts:
             attempts += 1
             time.sleep(randwait(WAIT))
-            output = llm_safe_request(prompt, model, STOP, service=service)
+            output = await llm_safe_request_async(prompt, model, STOP, service=service)
             rating_raw = output["choices"][0]["message"]["content"].strip()
 
             if re.search(r"Rationale:", rating_raw, re.I) and re.search(
@@ -86,7 +87,7 @@ async def generate_answer_rating(
                     author_id=author_id,
                     timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 )
-                logging.info(
+                logging.debug(
                     f"Generated rating: {rating.value} for answer: {answer.text} with rationale: {rating.text}"
                 )
                 if flush:

@@ -1,10 +1,11 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import event
 from fleecekmbackend.core.config import DATABASE_URL
 
 engine = create_async_engine(
-    DATABASE_URL, pool_size=256, max_overflow=1024, pool_recycle=3600
+    DATABASE_URL, pool_size=4096, max_overflow=4096, pool_recycle=3600
 )
 async_session = sessionmaker(engine, class_=AsyncSession, autoflush=True)
 Base = declarative_base()

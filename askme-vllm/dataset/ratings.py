@@ -1,109 +1,60 @@
-import re
-import time
-import logging
 from datetime import datetime
-from sqlalchemy.ext.asyncio import AsyncSession
-from fleecekmbackend.db.models import (
-    Paragraph,
-    Question,
-    Answer,
-    Rating,
-)
-from fleecekmbackend.db.helpers import create_author_if_not_exists
-from fleecekmbackend.core.utils.llm import (
-    llm_safe_request,
-    llm_safe_request_async,
-    randwait,
-    generate_prompts_from_template,
-)
-from fleecekmbackend.services.dataset.common import generate_fact_with_context
-from fleecekmbackend.core.config import (
-    WAIT,
-    MODEL,
-    STOP,
-    PROMPT_PREFIX,
-    PROMPT_SUFFIX,
-    MAX_ATTEMPTS,
-    LOGGING_LEVEL,
-)
+import logging
+import re
 
-logging.basicConfig(
-    level=LOGGING_LEVEL, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+from vllm import SamplingParams
+from ..models import Answer, Rating, dataset
+from .common import generate_fact_with_context
+from ..helpers import create_author_if_not_exists
 
 
-async def generate_answer_rating(
-    db: AsyncSession,
-    answer_id: int,
-    max_attempts: int = MAX_ATTEMPTS,
-    model: str = MODEL,
-    service: str = "gpublaze",
-    flush: bool = True,
-):
+def generate_answer_rating(answer_id: int, llm, model: str = "llama3-70B-instruct"):
     try:
         prompt_template = "{PROMPT_PREFIX}Based on this fact: \n\n `{REFERENCE}` \n\n Rate the following answer to the question - Question: `{QUESTION}` \n\n Answer: `{ANSWER}`; give a number from 0-5 where 0 is 'No answer or completely irrelevant', 1 is 'Significantly incorrect or incomplete', 2 is 'Partially correct; major inaccuracies or omissions', 3 is 'Correct but lacks depth; minimal detail', 4 is 'Mostly correct; minor errors, includes relevant details', 5 is 'Fully accurate and detailed; clear and comprehensive'. Your answer should follow the form `Answer:<number> \n Rationale:<justify your judgment in a paragraph>`. \n{PROMPT_SUFFIX}"
 
-        answer = await db.get(Answer, answer_id)
-        question = await db.get(Question, answer.question_id)
-        paragraph = await db.get(Paragraph, question.paragraph_id)
+        answer = next(a for a in dataset.answers if a.id == answer_id)
+        question = next(q for q in dataset.questions if q.id == answer.question_id)
+        paragraph = next(p for p in dataset.paragraphs if p.id == question.paragraph_id)
 
         _, reference = generate_fact_with_context(paragraph)
 
-        prompt, template = generate_prompts_from_template(
-            prompt_template,
-            {
-                "REFERENCE": reference,
-                "QUESTION": question.text,
-                "ANSWER": answer.text,
-                "PROMPT_PREFIX": PROMPT_PREFIX,
-                "PROMPT_SUFFIX": PROMPT_SUFFIX,
-            },
+        prompt = prompt_template.format(
+            REFERENCE=reference,
+            QUESTION=question.text,
+            ANSWER=answer.text,
+            PROMPT_PREFIX="",
+            PROMPT_SUFFIX="",
         )
 
-        author_id = await create_author_if_not_exists(template, model)
+        author_id = create_author_if_not_exists(prompt, model)
 
         logging.debug(f"Author ID: {author_id}")
 
         # main loop
-        attempts = 0
-        while attempts < max_attempts:
-            attempts += 1
-            time.sleep(randwait(WAIT))
-            output = await llm_safe_request_async(prompt, model, STOP, service=service)
-            rating_raw = output["choices"][0]["message"]["content"].strip()
+        sampling_params = SamplingParams(max_tokens=100, temperature=0.7)
+        output = llm.generate([prompt], sampling_params)
+        rating_raw = output[0].text.strip()
 
-            if re.search(r"Rationale:", rating_raw, re.I) and re.search(
-                r"[0-5]", rating_raw
-            ):
-                score = int(re.search(r"[0-5]", rating_raw).group())
-                rationale = "".join(rating_raw.split("Rationale:", re.I)[1:]).strip()
+        if re.search(r"Rationale:", rating_raw, re.I) and re.search(
+            r"[0-5]", rating_raw
+        ):
+            score = int(re.search(r"[0-5]", rating_raw).group())
+            rationale = "".join(rating_raw.split("Rationale:", re.I)[1:]).strip()
 
-                logging.debug(f"Score: {score}, Rationale: {rationale}")
+            logging.debug(f"Score: {score}, Rationale: {rationale}")
 
-                rating = Rating(
-                    text=rationale,
-                    value=score,
-                    answer_id=answer_id,
-                    author_id=author_id,
-                    timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                )
-                logging.debug(
-                    f"Generated rating: {rating.value} for answer: {answer.text} with rationale: {rating.text}"
-                )
-                if flush:
-                    db.add(rating)
-                    await db.flush()
-                    await db.refresh(rating, ["id"])
-                    logging.debug(
-                        f"Generated rating: {rating.value} for answer: {answer.text} with rationale: {rating.text}, id: {rating.id}"
-                    )
-                    rating_id = rating.id
-                    return rating_id
-                else:
-                    return rating
-
-        raise Exception(
-            f"Cannot rate answers to the correct format after {max_attempts} attempts."
-        )
+            rating = Rating(
+                id=len(dataset.ratings) + 1,
+                text=rationale,
+                value=score,
+                answer_id=answer_id,
+                author_id=author_id,
+                timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            )
+            logging.debug(
+                f"Generated rating: {rating.value} for answer: {answer.text} with rationale: {rating.text}"
+            )
+            return rating
+        raise Exception("Invalid rating generated")
     except Exception as e:
         logging.error(f"An error occurred at generate_answer_rating: {e}")

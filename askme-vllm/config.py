@@ -2,8 +2,11 @@ import logging
 
 DATABASE_URL = "mysql+aiomysql://root:fleecekm@localhost:13306/askmefull"
 DATASET_PATH = "data/wiki_text_cleaned_v1.csv"
-WAIT = 0.1
+WAIT = 0
 MODEL = "meta-llama/Meta-Llama-3-70B-Instruct"
+MAX_TOKEN = 512
+TEMPERATURE = 0
+SEED = 42
 STOP = ["[/INST]", "</s>"]
 PROMPT_PREFIX, PROMPT_SUFFIX = [
     "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n",

@@ -83,3 +83,6 @@ class Dataset:
     questions: List[Question] = field(default_factory=list)
     answers: List[Answer] = field(default_factory=list)
     ratings: List[Rating] = field(default_factory=list)
+
+
+dataset = Dataset()

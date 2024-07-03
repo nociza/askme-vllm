@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "fleecekmbackend"
+name = "askmevllm"
 version = "0.1.0"
 description = ""
 authors = ["nociza <azicon@berkeley.edu>"]

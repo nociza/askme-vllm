@@ -3,9 +3,9 @@ import logging
 import re
 
 from vllm import SamplingParams
-from ..models import Answer, Rating, dataset
-from .common import generate_fact_with_context
-from ..helpers import create_author_if_not_exists
+from askmevllm.models import Answer, Rating, dataset
+from askmevllm.dataset.common import generate_fact_with_context
+from askmevllm.helpers import create_author_if_not_exists
 
 
 def generate_answer_rating(answer_id: int, llm, model: str = "llama3-70B-instruct"):

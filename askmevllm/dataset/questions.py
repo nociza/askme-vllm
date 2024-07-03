@@ -7,17 +7,19 @@ from typing import List
 
 import torch
 from vllm import SamplingParams
-from ..models import Question, Paragraph, dataset
-from .common import WAIT, generate_fact_with_context, create_author_if_not_exists
+from askmevllm.models import Question, Paragraph, dataset
+from askmevllm.dataset.common import generate_fact_with_context
+from askmevllm.helpers import create_author_if_not_exists
+from askmevllm.config import NUMQUESTIONS, TEMPERATURE
 
 
 def generate_questions_single_turn(
-    paragraphs: List[Paragraph], llm, k: int = 5
+    paragraphs: List[Paragraph], llm, k: int = NUMQUESTIONS
 ) -> List[List[Question]]:
     try:
         prompts = []
         for paragraph in paragraphs:
-            prompt_template = "{PROMPT_PREFIX}Generate {NUM_QUESTIONS} short answer questions about the facts mentioned in the following paragraph. The questions should be self-contained; meaning you avoid using references such as 'it', 'the game', 'the person', etc., but should directly include the name of the referenced item instead. Remember to include relevant context in the question. \n\nParagraph: {PARAGRAPH}\n{PROMPT_SUFFIX}"
+            prompt_template = "{PROMPT_PREFIX}Generate {NUM_QUESTIONS} short answer questions about the facts mentioned in the following paragraph. The questions should be self-contained; meaning you avoid using references such as 'it', 'the game', 'the person', etc., but should directly include the name of the referenced item instead. Remember to include relevant context in the question. Return a ordered list. \n\nParagraph: {PARAGRAPH}\n{PROMPT_SUFFIX}"
             context, fact = generate_fact_with_context(paragraph)
             prompt = prompt_template.format(
                 PARAGRAPH=fact, PROMPT_PREFIX="", PROMPT_SUFFIX="", NUM_QUESTIONS=k
@@ -28,19 +30,21 @@ def generate_questions_single_turn(
 
         logging.debug("Generating questions for paragraphs")
 
-        sampling_params = SamplingParams(max_tokens=500, temperature=0.7)
+        sampling_params = SamplingParams(max_tokens=500, temperature=TEMPERATURE)
         outputs = llm.generate(prompts, sampling_params)
         all_question_objects = []
 
         for paragraph, output in zip(paragraphs, outputs):
-            generated_text = output.text.strip()
+            generated_text = output.outputs[0].text.strip()
             logging.debug(f"Generated questions: {generated_text}")
 
             new_questions = [
-                x[2:].strip()
+                re.sub(r"^\d\.", "", x).strip()
                 for x in generated_text.split("\n")
                 if re.match(r"^[0-9]\.", x)
             ]
+
+            print(new_questions)
 
             question_objects = [
                 Question(
@@ -57,7 +61,7 @@ def generate_questions_single_turn(
                 )
                 for q in new_questions
             ]
-            all_question_objects.append(question_objects)
+            all_question_objects.extend(question_objects)
 
         return all_question_objects
 

@@ -2,9 +2,9 @@ from datetime import datetime
 import logging
 
 from vllm import SamplingParams
-from ..models import Answer, dataset
-from .common import generate_fact_with_context
-from ..helpers import create_author_if_not_exists
+from askmevllm.models import Answer, dataset
+from askmevllm.dataset.common import generate_fact_with_context
+from askmevllm.helpers import create_author_if_not_exists
 
 
 def generate_answer(

@@ -1,15 +1,13 @@
+import os
 import random
 from vllm import SamplingParams, LLM
-from .config import MAX_TOKEN, TEMPERATURE, SEED, MODEL
-
+from askmevllm.config import MAX_TOKEN, TEMPERATURE, SEED, MODEL
 
 sampling_params = SamplingParams(
     max_tokens=MAX_TOKEN,
     temperature=TEMPERATURE,
     seed=SEED,
 )
-
-llm = LLM(MODEL)
 
 
 def randwait(wait, offset=0):

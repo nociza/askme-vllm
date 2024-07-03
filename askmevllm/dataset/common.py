@@ -1,4 +1,4 @@
-from ..models import Paragraph
+from askmevllm.models import Paragraph
 
 
 def generate_fact_with_context(paragraph: Paragraph):

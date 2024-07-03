@@ -1,19 +1,17 @@
 import logging
+import os
 import time
 from tqdm import tqdm
 from vllm import LLM
-from .models import dataset
-from .config import DATASET_PATH
-from .dataset.common import load_csv_data_all
-from .dataset.questions import generate_questions_single_turn, filter_questions
-from .dataset.answers import generate_answer
-from .dataset.ratings import generate_answer_rating
+from askmevllm.models import dataset
+from askmevllm.config import DATASET_PATH, MODEL, SEED
+from askmevllm.helpers import load_csv_data_all, load_csv_data_rand_n
+from askmevllm.dataset.questions import generate_questions_single_turn, filter_questions
+from askmevllm.dataset.answers import generate_answer
+from askmevllm.dataset.ratings import generate_answer_rating
 
 
-def process_all_paragraphs_s2s(batch_size=5):
-    # Initialize the local LLM engine
-    llm = LLM(model="path/to/llama3-70B-instruct")
-
+def process_all_paragraphs_s2s(batch_size, llm):
     # Stage 1: Generate Questions
     logging.info("Starting stage 1: Generate Questions")
     stage_1_start_time = time.time()
@@ -26,10 +24,9 @@ def process_all_paragraphs_s2s(batch_size=5):
                 break
             all_questions = generate_questions_single_turn(paragraphs, llm)
             if all_questions:
-                for questions in all_questions:
-                    dataset.questions.extend(questions)
-                    paragraph = questions[-1]
-                    paragraph.processed = True
+                dataset.questions.extend(all_questions)
+            for paragraph in paragraphs:
+                paragraph.processed = True
             pbar.update(len(paragraphs))
     stage_1_end_time = time.time()
 
@@ -93,19 +90,20 @@ def process_all_paragraphs_s2s(batch_size=5):
     return times
 
 
-def start_background_process_s2s(batch_size=128):
+def start_background_process_s2s(batch_size, llm):
     try:
-        process_all_paragraphs_s2s(batch_size)
+        process_all_paragraphs_s2s(batch_size, llm)
     except Exception as e:
         logging.error("Error in background process:")
         logging.error(str(e))
 
 
 def main():
-    # Load dataset (in-memory)
-    load_csv_data_all(DATASET_PATH)
+    load_csv_data_rand_n(DATASET_PATH, 100)
 
-    start_background_process_s2s(128)
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+    llm = LLM(MODEL, tensor_parallel_size=2, seed=SEED)
+    start_background_process_s2s(64, llm)
 
 
 if __name__ == "__main__":

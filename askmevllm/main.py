@@ -101,7 +101,7 @@ def start_background_process_s2s(batch_size, llm):
 def main():
     load_csv_data_rand_n(DATASET_PATH, 100)
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
     llm = LLM(MODEL, tensor_parallel_size=2, seed=SEED)
     start_background_process_s2s(64, llm)
 

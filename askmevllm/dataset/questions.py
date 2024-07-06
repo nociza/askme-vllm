@@ -1,12 +1,13 @@
 from datetime import datetime
 import logging
 import re
-import time
+import json
 import traceback
 from typing import List
 
-import torch
-from vllm import SamplingParams
+from vllm import LLM, SamplingParams
+from outlines.serve.vllm import JSONLogitsProcessor
+from pydantic import BaseModel
 from askmevllm.models import Question, Paragraph, dataset
 from askmevllm.dataset.common import generate_fact_with_context
 from askmevllm.helpers import create_author_if_not_exists
@@ -125,32 +126,30 @@ def is_answerable(question, fact, llm):
     raise Exception("Question Malformed: ", answer)
 
 
-def is_answerable_guided_choice(question, fact="", llm=None):
+class YesNoOutput(BaseModel):
+    text: str
+
+
+def is_answerable_guided_choice(question: str, fact: str = "", llm: LLM = None) -> bool:
     if not question.strip():
         logging.debug("No question seen in is_answerable: ", question.strip())
         return False
 
     if not fact:
-        prompt = f"Is the following question: \n\n {question} \n\n a valid question without additional context? \n\n Reply 'YES' and 'NO' only."
+        prompt = f"Is the following question: \n\n {question} \n\n a valid question without additional context? \n\n Reply 'Y' and 'N' only."
     else:
-        prompt = f"Is the following question: \n\n {question} \n\n answerable using only the following fact? \n\n Fact: {fact} \n\n Reply 'YES' and 'NO' only."
+        prompt = f"Is the following question: \n\n {question} \n\n answerable using only the following fact? \n\n Fact: {fact} \n\n Reply 'Y' and 'N' only."
 
-    sampling_params = SamplingParams(max_tokens=10, temperature=0.0)
-    output = llm.generate([prompt], sampling_params)
-
-    logits = output[0].logits
-    yes_token = llm.tokenizer.encode("YES")[0]
-    no_token = llm.tokenizer.encode("NO")[0]
-
-    yes_logit = logits[:, yes_token]
-    no_logit = logits[:, no_token]
-
-    yes_prob = torch.softmax(yes_logit, dim=-1).item()
-    no_prob = torch.softmax(no_logit, dim=-1).item()
-
-    logging.debug(f"YES probability: {yes_prob}, NO probability: {no_prob}")
-
-    if yes_prob > no_prob:
-        return True
-    else:
+    logits_processor = JSONLogitsProcessor(schema=YesNoOutput, llm=llm.llm_engine)
+    logits_processor.fsm.vocabulary = ["Y", "N"]
+    sampling_params = SamplingParams(
+        max_tokens=10, temperature=TEMPERATURE, logits_processors=[logits_processor]
+    )
+    outputs = llm.generate([prompt], sampling_params)
+    answer = json.loads(outputs[0].outputs[0].text.strip())
+    if answer["text"] == "N":
         return False
+    elif answer["text"] == "Y":
+        return True
+    logging.info("Question Malformed: ", answer)
+    raise Exception("Question Malformed: ", answer)

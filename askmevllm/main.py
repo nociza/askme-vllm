@@ -7,7 +7,7 @@ from askmevllm.models import dataset
 from askmevllm.config import DATASET_PATH, MODEL, SEED
 from askmevllm.helpers import load_csv_data_all, load_csv_data_rand_n
 from askmevllm.dataset.questions import generate_questions_single_turn, filter_questions
-from askmevllm.dataset.answers import generate_answer
+from askmevllm.dataset.answers import generate_answers
 from askmevllm.dataset.ratings import generate_answer_rating
 
 
@@ -40,7 +40,7 @@ def process_all_paragraphs_s2s(batch_size, llm):
             if not questions:
                 logging.info("No unprocessed questions found. Moving to next stage.")
                 break
-            filtered_questions = filter_questions(questions, llm)
+            filter_questions(questions, llm)
             pbar.update(len(questions))
     stage_2_end_time = time.time()
 
@@ -54,11 +54,13 @@ def process_all_paragraphs_s2s(batch_size, llm):
             if not questions:
                 logging.info("No unprocessed questions found. Moving to next stage.")
                 break
-            all_answers = [generate_answer(question.id, llm) for question in questions]
-            for answers in all_answers:
-                dataset.answers.extend(answers)
-                question = answers[-1]
-                question.processed = True
+            all_answers = generate_answers(
+                questions, setting="ic", llm=llm
+            )  # Assuming "ic" setting for example
+            if all_answers:
+                dataset.answers.extend(all_answers)
+                for question in questions:
+                    question.processed = True
             pbar.update(len(questions))
     stage_3_end_time = time.time()
 
@@ -99,9 +101,9 @@ def start_background_process_s2s(batch_size, llm):
 
 
 def main():
-    load_csv_data_rand_n(DATASET_PATH, 100)
+    load_csv_data_rand_n(DATASET_PATH, 64)
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
     llm = LLM(MODEL, tensor_parallel_size=2, seed=SEED)
     start_background_process_s2s(64, llm)
 

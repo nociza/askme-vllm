@@ -8,7 +8,7 @@ from askmevllm.config import DATASET_PATH, MODEL, SEED
 from askmevllm.helpers import load_csv_data_all, load_csv_data_rand_n
 from askmevllm.dataset.questions import generate_questions_single_turn, filter_questions
 from askmevllm.dataset.answers import generate_answers
-from askmevllm.dataset.ratings import generate_answer_rating
+from askmevllm.dataset.ratings import generate_answer_ratings
 
 
 def process_all_paragraphs_s2s(batch_size, llm):
@@ -54,9 +54,8 @@ def process_all_paragraphs_s2s(batch_size, llm):
             if not questions:
                 logging.info("No unprocessed questions found. Moving to next stage.")
                 break
-            all_answers = generate_answers(
-                questions, setting="ic", llm=llm
-            )  # Assuming "ic" setting for example
+            all_answers = generate_answers(questions, setting="ic", llm=llm)
+            all_answers.extend(generate_answers(questions, setting="zs", llm=llm))
             if all_answers:
                 dataset.answers.extend(all_answers)
                 for question in questions:
@@ -74,10 +73,9 @@ def process_all_paragraphs_s2s(batch_size, llm):
             if not answers:
                 logging.info("No unprocessed answers found. Finishing process.")
                 break
-            all_ratings = [generate_answer_rating(answer.id, llm) for answer in answers]
-            for ratings in all_ratings:
-                dataset.ratings.extend(ratings)
-                answer = ratings[-1]
+            all_ratings = generate_answer_ratings(answers, llm)
+            dataset.ratings.extend(all_ratings)
+            for answer in answers:
                 answer.processed = True
             pbar.update(len(answers))
     stage_4_end_time = time.time()

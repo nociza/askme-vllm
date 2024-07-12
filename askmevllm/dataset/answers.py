@@ -46,7 +46,7 @@ def generate_answers(questions: List[Question], setting: str, llm):
         outputs = llm.generate(batch_prompts, sampling_params)
 
         for i, output in enumerate(outputs):
-            answer_text = output.text.strip()
+            answer_text = output.outputs[0].text.strip()
             if answer_text:
                 prompt_data = prompts[i]
                 answer = Answer(

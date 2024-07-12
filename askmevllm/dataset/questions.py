@@ -8,7 +8,7 @@ from typing import List, Optional
 from vllm import LLM, SamplingParams
 from outlines.serve.vllm import JSONLogitsProcessor
 from pydantic import BaseModel
-from askmevllm.models import Question, Paragraph, dataset
+from askmevllm.models import Question, Paragraph, dataset, get_paragraph
 from askmevllm.dataset.common import generate_fact_with_context
 from askmevllm.helpers import create_author_if_not_exists
 from askmevllm.config import NUMQUESTIONS, TEMPERATURE
@@ -74,34 +74,34 @@ def generate_questions_single_turn(
 
 def filter_questions(questions: List[Question], llm) -> List[Question]:
     updated_questions = []
+    all_question_texts = []
+    all_facts = []
+    question_map = {}
 
-    questions_by_paragraph = {}
     for q in questions:
-        if q.paragraph_id not in questions_by_paragraph:
-            questions_by_paragraph[q.paragraph_id] = []
-        questions_by_paragraph[q.paragraph_id].append(q)
-
-    for paragraph_id, qs in questions_by_paragraph.items():
-        paragraph = next(p for p in dataset.paragraphs if p.id == paragraph_id)
+        paragraph = dataset.get_paragraph(q.paragraph_id)
         context, fact = generate_fact_with_context(paragraph)
 
-        question_texts = [q.text for q in qs]
+        all_question_texts.append(q.text)
+        all_facts.append(fact)
+        question_map[q.text] = q
 
-        # Process all questions for this paragraph at once
-        ic_results = is_answerable_guided_choice(question_texts, llm, [fact] * len(qs))
-        zs_results = is_answerable_guided_choice(question_texts, llm)
+    # Process all questions at once for IC
+    ic_results = is_answerable_guided_choice(all_question_texts, llm, all_facts)
 
-        for q, ic_result, zs_result in zip(qs, ic_results, zs_results):
-            logging.debug(f"Checking if answerable: {q.text}")
-            logging.debug(
-                f"Answerable in IC: {ic_result}, Answerable in ZS: {zs_result}"
-            )
-            if not ic_result or not zs_result:
-                q.rejected = True
-            q.is_answerable_ic = ic_result
-            q.is_answerable_zs = zs_result
-            q.filtered = True
-            updated_questions.append(q)
+    # Process all questions at once for ZS
+    zs_results = is_answerable_guided_choice(all_question_texts, llm)
+
+    for q_text, ic_result, zs_result in zip(all_question_texts, ic_results, zs_results):
+        q = question_map[q_text]
+        logging.debug(f"Checking if answerable: {q_text}")
+        logging.debug(f"Answerable in IC: {ic_result}, Answerable in ZS: {zs_result}")
+        if not ic_result or not zs_result:
+            q.rejected = True
+        q.is_answerable_ic = ic_result
+        q.is_answerable_zs = zs_result
+        q.filtered = True
+        updated_questions.append(q)
 
     return updated_questions
 

@@ -20,6 +20,7 @@ def load_csv_data_all(file, overwrite=False):
 
         if overwrite:
             dataset.paragraphs.clear()
+            dataset.paragraph_dict.clear()
             logging.info("Existing entries in the dataset have been removed.")
 
         # Convert DataFrame to Paragraph objects and add to dataset
@@ -40,6 +41,7 @@ def load_csv_data_all(file, overwrite=False):
                 original_entry_id=row["original_entry_id"],
             )
             dataset.paragraphs.append(paragraph)
+            dataset.paragraph_dict[paragraph.id] = paragraph
 
         logging.info(f"Successfully loaded {len(df)} entries into the local dataset.")
 
@@ -69,6 +71,7 @@ def load_csv_data_rand_n(file, n, overwrite=False):
 
         if overwrite:
             dataset.paragraphs.clear()
+            dataset.paragraph_dict.clear()
             logging.info("Existing entries in the dataset have been removed.")
 
         # Convert DataFrame to Paragraph objects and add to dataset
@@ -89,6 +92,7 @@ def load_csv_data_rand_n(file, n, overwrite=False):
                 original_entry_id=row["original_entry_id"],
             )
             dataset.paragraphs.append(paragraph)
+            dataset.paragraph_dict[paragraph.id] = paragraph
 
         logging.info(f"Successfully loaded {len(df)} entries into the local dataset.")
 
@@ -118,4 +122,5 @@ def create_author_if_not_exists(prompt: str, model: str) -> int:
     author_id = len(dataset.authors) + 1
     new_author = Author(id=author_id, model=model, prompt=prompt)
     dataset.authors.append(new_author)
+    dataset.author_dict[new_author.id] = new_author
     return author_id

@@ -4,7 +4,7 @@ import logging
 import re
 
 from vllm import SamplingParams
-from askmevllm.models import Answer, Rating, dataset, get_question, get_paragraph
+from askmevllm.models import Answer, Rating, dataset
 from askmevllm.dataset.common import generate_fact_with_context
 from askmevllm.helpers import create_author_if_not_exists
 from askmevllm.config import MODEL
@@ -18,8 +18,8 @@ def generate_answer_ratings(answers: List[Answer], llm):
         prompt_template = "{PROMPT_PREFIX}Based on this fact: \n\n `{REFERENCE}` \n\n Rate the following answer to the question - Question: `{QUESTION}` \n\n Answer: `{ANSWER}`; give a number from 0-5 where 0 is 'No answer or completely irrelevant', 1 is 'Significantly incorrect or incomplete', 2 is 'Partially correct; major inaccuracies or omissions', 3 is 'Correct but lacks depth; minimal detail', 4 is 'Mostly correct; minor errors, includes relevant details', 5 is 'Fully accurate and detailed; clear and comprehensive'. Your answer should follow the form `Answer:<number> \n Rationale:<justify your judgment in a paragraph>`. \n{PROMPT_SUFFIX}"
 
         for answer in answers:
-            question = get_question(answer.question_id)
-            paragraph = get_paragraph(question.paragraph_id)
+            question = dataset.get_question(answer.question_id)
+            paragraph = dataset.get_paragraph(question.paragraph_id)
             _, reference = generate_fact_with_context(paragraph)
 
             prompt = prompt_template.format(

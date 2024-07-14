@@ -8,7 +8,7 @@ from typing import List, Optional
 from vllm import LLM, SamplingParams
 from outlines.serve.vllm import JSONLogitsProcessor
 from pydantic import BaseModel
-from askmevllm.models import Question, Paragraph, dataset, get_paragraph
+from askmevllm.models import Question, Paragraph, dataset
 from askmevllm.dataset.common import generate_fact_with_context
 from askmevllm.helpers import create_author_if_not_exists
 from askmevllm.config import NUMQUESTIONS, TEMPERATURE
@@ -45,8 +45,6 @@ def generate_questions_single_turn(
                 if re.match(r"^[0-9]\.", x)
             ]
 
-            print(new_questions)
-
             question_objects = [
                 Question(
                     id=len(dataset.questions) + 1,
@@ -80,6 +78,7 @@ def filter_questions(questions: List[Question], llm) -> List[Question]:
 
     for q in questions:
         paragraph = dataset.get_paragraph(q.paragraph_id)
+
         context, fact = generate_fact_with_context(paragraph)
 
         all_question_texts.append(q.text)

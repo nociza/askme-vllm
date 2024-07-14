@@ -2,6 +2,7 @@ from collections import defaultdict
 from typing import List, Dict, Optional
 from dataclasses import dataclass, field
 import hashlib
+import pandas as pd
 
 
 @dataclass
@@ -169,3 +170,57 @@ class Dataset:
 
 
 dataset = Dataset()
+
+
+def flatten_data(dataset: Dataset):
+    data = []
+
+    for paragraph in dataset.paragraphs:
+        questions = dataset.get_questions_for_paragraph(paragraph.id)
+        for question in questions:
+            answers = dataset.get_answers_for_question(question.id)
+            for answer in answers:
+                ratings = dataset.get_ratings_for_answer(answer.id)
+                for rating in ratings:
+                    row = {
+                        "paragraph_id": paragraph.id,
+                        "page_name": paragraph.page_name,
+                        "section_name": paragraph.section_name,
+                        "subsection_name": paragraph.subsection_name,
+                        "subsubsection_name": paragraph.subsubsection_name,
+                        "paragraph_text": paragraph.text,
+                        "paragraph_text_cleaned": paragraph.text_cleaned,
+                        "paragraph_word_count": paragraph.word_count,
+                        "paragraph_is_bad": paragraph.is_bad,
+                        "paragraph_within_page_order": paragraph.within_page_order,
+                        "paragraph_processed": paragraph.processed,
+                        "paragraph_original_entry_id": paragraph.original_entry_id,
+                        "question_id": question.id,
+                        "question_scope": question.scope,
+                        "question_context": question.context,
+                        "question_text": question.text,
+                        "question_author_id": question.author_id,
+                        "question_timestamp": question.timestamp,
+                        "question_upvote": question.upvote,
+                        "question_downvote": question.downvote,
+                        "question_turns": question.turns,
+                        "question_filtered": question.filtered,
+                        "question_is_answerable_zs": question.is_answerable_zs,
+                        "question_is_answerable_ic": question.is_answerable_ic,
+                        "question_rejected": question.rejected,
+                        "question_processed": question.processed,
+                        "answer_id": answer.id,
+                        "answer_author_id": answer.author_id,
+                        "answer_setting": answer.setting,
+                        "answer_timestamp": answer.timestamp,
+                        "answer_text": answer.text,
+                        "answer_processed": answer.processed,
+                        "rating_id": rating.id,
+                        "rating_text": rating.text,
+                        "rating_value": rating.value,
+                        "rating_author_id": rating.author_id,
+                        "rating_timestamp": rating.timestamp,
+                    }
+                    data.append(row)
+
+    return pd.DataFrame(data)

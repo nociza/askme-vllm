@@ -3,7 +3,7 @@ import os
 import time
 from tqdm import tqdm
 from vllm import LLM
-from askmevllm.models import dataset
+from askmevllm.models import dataset, flatten_data
 from askmevllm.config import DATASET_PATH, MODEL, SEED
 from askmevllm.helpers import load_csv_data_all, load_csv_data_rand_n
 from askmevllm.dataset.questions import generate_questions_single_turn, filter_questions
@@ -87,6 +87,10 @@ def process_all_paragraphs_s2s(batch_size, llm):
         "stage_4_time": stage_4_end_time - stage_4_start_time,
     }
     logging.info(f"Process completed in {times}")
+
+    df = flatten_data(dataset)
+    df.to_csv("output.csv", index=False)
+
     return times
 
 
@@ -101,7 +105,7 @@ def start_background_process_s2s(batch_size, llm):
 def main():
     load_csv_data_rand_n(DATASET_PATH, 64)
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "2,3"
     llm = LLM(MODEL, tensor_parallel_size=2, seed=SEED)
     start_background_process_s2s(64, llm)
 

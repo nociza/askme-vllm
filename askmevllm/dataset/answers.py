@@ -3,7 +3,7 @@ import logging
 from typing import List
 
 from vllm import SamplingParams
-from askmevllm.models import Answer, Question, dataset, get_paragraph
+from askmevllm.models import Answer, Question, dataset
 from askmevllm.dataset.common import generate_fact_with_context
 from askmevllm.helpers import create_author_if_not_exists
 from askmevllm.config import MODEL, TEMPERATURE
@@ -19,7 +19,7 @@ def generate_answers(questions: List[Question], setting: str, llm):
             prompt_template = "{PROMPT_PREFIX}{CONTEXT_PROMPT}Answer the following question in a succinct manner: {QUESTION}\n{PROMPT_SUFFIX}"
 
             if setting == "ic":
-                paragraph = get_paragraph(question.paragraph_id)
+                paragraph = dataset.get_paragraph(question.paragraph_id)
                 _, fact = generate_fact_with_context(paragraph)
                 context_prompt = f"Using this fact: {fact} \n\n "
             elif setting == "zs":

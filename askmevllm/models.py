@@ -144,6 +144,24 @@ class Dataset:
         self.rating_dict[rating.id] = rating
         self.ratings_by_answer[rating.answer_id].append(rating)
 
+    def add_questions(self, questions: List[Question]):
+        self.questions.extend(questions)
+        for question in questions:
+            self.question_dict[question.id] = question
+            self.questions_by_paragraph[question.paragraph_id].append(question)
+
+    def add_answers(self, answers: List[Answer]):
+        self.answers.extend(answers)
+        for answer in answers:
+            self.answer_dict[answer.id] = answer
+            self.answers_by_question[answer.question_id].append(answer)
+
+    def add_ratings(self, ratings: List[Rating]):
+        self.ratings.extend(ratings)
+        for rating in ratings:
+            self.rating_dict[rating.id] = rating
+            self.ratings_by_answer[rating.answer_id].append(rating)
+
     def get_paragraph(self, paragraph_id: int) -> Optional[Paragraph]:
         return self.paragraph_dict.get(paragraph_id)
 

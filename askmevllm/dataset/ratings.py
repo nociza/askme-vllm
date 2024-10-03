@@ -33,7 +33,6 @@ def generate_answer_ratings(answers: List[Answer], llm):
             author_id = create_author_if_not_exists(prompt, MODEL)
             prompts.append((prompt, answer.id, author_id))
 
-        # Generate ratings in batch
         batch_prompts = [p[0] for p in prompts]
         sampling_params = SamplingParams(max_tokens=100, temperature=0.7)
         outputs = llm.generate(batch_prompts, sampling_params)

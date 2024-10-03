@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, field
 import hashlib
 import pandas as pd
@@ -190,55 +190,84 @@ class Dataset:
 dataset = Dataset()
 
 
-def flatten_data(dataset: Dataset):
-    data = []
+def flatten_dataset(dataset: Dataset) -> List[Dict[str, Any]]:
+    flattened_data = []
 
     for paragraph in dataset.paragraphs:
+        paragraph_data = {
+            "paragraph_id": paragraph.id,
+            "page_name": paragraph.page_name,
+            "section_name": paragraph.section_name,
+            "subsection_name": paragraph.subsection_name,
+            "subsubsection_name": paragraph.subsubsection_name,
+            "paragraph_text": paragraph.text,
+            "word_count": paragraph.word_count,
+            "is_bad": paragraph.is_bad,
+            "within_page_order": paragraph.within_page_order,
+            "paragraph_processed": paragraph.processed,
+            "original_entry_id": paragraph.original_entry_id,
+        }
+
         questions = dataset.get_questions_for_paragraph(paragraph.id)
         for question in questions:
+            question_data = {
+                "question_id": question.id,
+                "question_scope": question.scope,
+                "question_context": question.context,
+                "question_text": question.text,
+                "author_id": question.author_id,
+                "timestamp": question.timestamp,
+                "upvote": question.upvote,
+                "downvote": question.downvote,
+                "turns": question.turns,
+                "filtered": question.filtered,
+                "is_answerable_zs": question.is_answerable_zs,
+                "is_answerable_ic": question.is_answerable_ic,
+                "rejected": question.rejected,
+                "question_processed": question.processed,
+            }
+
             answers = dataset.get_answers_for_question(question.id)
             for answer in answers:
+                answer_data = {
+                    "answer_id": answer.id,
+                    "answer_setting": answer.setting,
+                    "answer_timestamp": answer.timestamp,
+                    "answer_text": answer.text,
+                    "answer_processed": answer.processed,
+                }
+
                 ratings = dataset.get_ratings_for_answer(answer.id)
                 for rating in ratings:
-                    row = {
-                        "paragraph_id": paragraph.id,
-                        "page_name": paragraph.page_name,
-                        "section_name": paragraph.section_name,
-                        "subsection_name": paragraph.subsection_name,
-                        "subsubsection_name": paragraph.subsubsection_name,
-                        "paragraph_text": paragraph.text,
-                        "paragraph_text_cleaned": paragraph.text_cleaned,
-                        "paragraph_word_count": paragraph.word_count,
-                        "paragraph_is_bad": paragraph.is_bad,
-                        "paragraph_within_page_order": paragraph.within_page_order,
-                        "paragraph_processed": paragraph.processed,
-                        "paragraph_original_entry_id": paragraph.original_entry_id,
-                        "question_id": question.id,
-                        "question_scope": question.scope,
-                        "question_context": question.context,
-                        "question_text": question.text,
-                        "question_author_id": question.author_id,
-                        "question_timestamp": question.timestamp,
-                        "question_upvote": question.upvote,
-                        "question_downvote": question.downvote,
-                        "question_turns": question.turns,
-                        "question_filtered": question.filtered,
-                        "question_is_answerable_zs": question.is_answerable_zs,
-                        "question_is_answerable_ic": question.is_answerable_ic,
-                        "question_rejected": question.rejected,
-                        "question_processed": question.processed,
-                        "answer_id": answer.id,
-                        "answer_author_id": answer.author_id,
-                        "answer_setting": answer.setting,
-                        "answer_timestamp": answer.timestamp,
-                        "answer_text": answer.text,
-                        "answer_processed": answer.processed,
+                    rating_data = {
                         "rating_id": rating.id,
                         "rating_text": rating.text,
                         "rating_value": rating.value,
-                        "rating_author_id": rating.author_id,
                         "rating_timestamp": rating.timestamp,
                     }
-                    data.append(row)
 
-    return pd.DataFrame(data)
+                    # Combine all data into a single record
+                    record = {
+                        **paragraph_data,
+                        **question_data,
+                        **answer_data,
+                        **rating_data,
+                    }
+                    flattened_data.append(record)
+
+                # If no ratings, still add the record
+                if not ratings:
+                    record = {**paragraph_data, **question_data, **answer_data}
+                    flattened_data.append(record)
+
+            # If no answers, still add the record
+            if not answers:
+                record = {**paragraph_data, **question_data}
+                flattened_data.append(record)
+
+        # If no questions, still add the record
+        if not questions:
+            record = {**paragraph_data}
+            flattened_data.append(record)
+
+    return pd.DataFrame(flattened_data)

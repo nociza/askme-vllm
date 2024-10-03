@@ -3,7 +3,7 @@ import os
 import time
 from tqdm import tqdm
 from vllm import LLM
-from askmevllm.models import dataset, flatten_data
+from askmevllm.models import dataset, flatten_dataset
 from askmevllm.config import DATASET_PATH, MODEL, SEED
 from askmevllm.helpers import load_csv_data_all, load_csv_data_rand_n
 from askmevllm.dataset.questions import generate_questions_single_turn, filter_questions
@@ -53,6 +53,7 @@ def process_all_paragraphs_s2s(batch_size, llm):
     with tqdm(total=total_questions, desc="Stage 3: Generate Answers") as pbar:
         while True:
             questions = [q for q in dataset.questions if not q.processed][:batch_size]
+            print(len([q for q in dataset.questions if not q.processed]))
             if not questions:
                 logging.info("No unprocessed questions found. Moving to next stage.")
                 break
@@ -60,8 +61,9 @@ def process_all_paragraphs_s2s(batch_size, llm):
             all_answers.extend(generate_answers(questions, setting="zs", llm=llm))
             if all_answers:
                 dataset.add_answers(all_answers)
-                for question in questions:
-                    dataset.question_dict[question.id].processed = True
+            for question in questions:
+                question.processed = True
+
             pbar.update(len(questions))
     stage_3_end_time = time.time()
 
@@ -78,7 +80,7 @@ def process_all_paragraphs_s2s(batch_size, llm):
             all_ratings = generate_answer_ratings(answers, llm)
             dataset.add_ratings(all_ratings)
             for answer in answers:
-                dataset.answer_dict[answer.id].processed = True
+                answer.processed = True
             pbar.update(len(answers))
     stage_4_end_time = time.time()
 
@@ -90,7 +92,7 @@ def process_all_paragraphs_s2s(batch_size, llm):
     }
     logging.info(f"Process completed in {times}")
 
-    df = flatten_data(dataset)
+    df = flatten_dataset(dataset)
     df.to_csv("output.csv", index=False)
 
     return times
